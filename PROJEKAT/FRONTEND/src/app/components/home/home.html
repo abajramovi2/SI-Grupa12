@@ -8,6 +8,9 @@
 
     <div class="header-actions">
       <button type="button" class="secondary-action" disabled>Izvezi izvjestaj</button>
+      <button type="button" class="secondary-action" (click)="idiNaImportTroskova()">
+        Import troskova
+      </button>
       @if (isAdmin) {
         <a class="primary-action" [href]="adminConsoleUrl" target="_blank" rel="noopener noreferrer">
           Admin Panel

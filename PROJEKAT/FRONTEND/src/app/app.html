@@ -29,6 +29,15 @@
           <span class="nav-icon">TR</span>
           <span>Unos troskova</span>
         </a>
+        <a
+          routerLink="/troskovi/import"
+          routerLinkActive="active"
+          [class.disabled]="!canOpenExpenses"
+          (click)="openExpensesTab($event)"
+        >
+          <span class="nav-icon">IM</span>
+          <span>Import troskova</span>
+        </a>
       </nav>
     }
 
