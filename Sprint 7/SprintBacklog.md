@@ -26,6 +26,7 @@ Pretpostavlja se da je fajl validnog formata
 
 **Veze sa drugim storyjima ili zavisnostima**  
 Zavisi od Unos troškova  
+
 **Acceptance Criteria**  
 Kada korisnik učita fajl, tada sistem mora prikazati podatke za obradu  
 Sistem ne smije prikazati grešku za validan fajl  
@@ -40,39 +41,6 @@ Kao administrativni zaposlenik želim da sistem automatski obradi podatke kako b
 **Sprint:** 7
 
 **Poslovna vrijednost:** Automatizuje proces unosa
-
-**Prioritet:** High
-
-**Pretpostavke i otvorena pitanja**  
-Pretpostavlja se da su podaci strukturirani  
-
-**Veze sa drugim storyjima ili zavisnostima**  
-Zavisi od Uvoz podataka  
-**Acceptance Criteria**  
-Kada sistem obradi podatke, tada ih mora transformisati u odgovarajući format  
-Sistem ne smije izgubiti podatke tokom obrade  
-
-
-
-### User story 3
-#### ID: 18
-#### Naziv: Validacija uvezenih podataka
-Kao administrativni zaposlenik želim provjeriti ispravnost podataka prije spremanja
-
-**Sprint:** 7
-
-**Poslovna vrijednost:** Održava kvalitet baze
-
-**Prioritet:** High
-
-**Pretpostavke i otvorena pitanja**  
-Pretpostavlja se da postoje validaciona pravila  
-
-**Veze sa drugim storyjima ili zavisnostima**  
-Zavisi od Obrada podataka  
-**Acceptance Criteria**  
-Kada postoje neispravni zapisi, tada sistem mora označiti greške  
-Sistem ne smije spremiti nevalidne podatke
 
 **Prioritet:** High
 
@@ -110,7 +78,6 @@ Kada postoje neispravni zapisi, tada sistem mora označiti greške
 Sistem ne smije spremiti nevalidne podatke  
 
 
-
 ## Planiranje budžeta
 
 ### User story 4
@@ -125,9 +92,7 @@ Kao glavni računovođa želim kreirati novi budžet po kategorijama, odjelima i
 **Prioritet:** High
 
 **Veze sa drugim storyjima ili zavisnostima**  
-Preduvjet za Pregled i uređivanje budžeta  
-Zavisi od Upravljanje korisnicima / RBAC  
-Preduvjet za Poređenje podataka  
+Zavisi od Upravljanje korisnicima / RBAC   
 Zavisi od Sign in  
 
 **Acceptance Criteria**  
@@ -210,13 +175,10 @@ Pretpostavlja se da je budžet kreiran i da ima status "Nacrt"
 **Veze sa drugim storyjima ili zavisnostima**  
 Zavisi od Kreiranje budžeta  
 Zavisi od Upravljanje korisnicima / RBAC  
-Zavisi od Sign in    
-Preduvjet za Poređenje podataka  
-Preduvjet za Generisanje upozorenja  
+Zavisi od Sign in   
 
 **Acceptance Criteria**  
-Kada glavni računovođa kreira budžet, tada sistem mora automatski dodijeliti status "Nacrt" tom budžetu  
-Kada finansijski direktor pristupi pregledu budžeta u statusu "Nacrt", tada sistem mora prikazati opcije "Odobri" i "Odbij" pored tog budžeta  
+Kada glavni računovođa kreira budžet, tada sistem mora automatski dodijeliti status "Nacrt" tom budžetu   
 Kada finansijski direktor klikne "Odobri", tada sistem mora promijeniti status budžeta u "Odobren" i ukloniti opciju "Uredi" za sve korisnike  
 Kada finansijski direktor klikne "Odbij", tada sistem mora promijeniti status budžeta u "Odbijen" i ukloniti opciju "Uredi" za sve korisnike  
 Sistem ne smije prikazati opcije "Odobri" i "Odbij" korisnicima koji nisu finansijski direktor  
