@@ -33,7 +33,15 @@
 
         <div class="form-group">
           <label>Datum *</label>
-          <input type="text" formControlName="datum" placeholder="dd.mm.yyyy" />
+          <div class="date-inputs">
+            <input type="text" formControlName="datum" placeholder="dd.mm.yyyy" />
+            <input
+              type="date"
+              class="date-picker"
+              title="Odaberite datum"
+              (change)="onDatePickerChange($event)"
+            />
+          </div>
           <small *ngIf="isFieldInvalid('datum')">Datum je obavezan u formatu dd.mm.yyyy.</small>
         </div>
 

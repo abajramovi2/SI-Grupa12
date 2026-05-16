@@ -226,6 +226,18 @@ export class ExpensesComponent implements OnInit {
     return !!field && field.invalid && (field.dirty || field.touched);
   }
 
+  onDatePickerChange(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+
+    if (!value) {
+      return;
+    }
+
+    this.expenseForm.patchValue({
+      datum: this.toDisplayDate(value),
+    });
+  }
+
   getItemLabel(item: any): string {
     return (
       item.naziv ||

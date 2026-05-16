@@ -280,6 +280,18 @@ private updateBudgetStatus(budget: Budget, statusOdobrenja: 'ODOBREN' | 'ODBIJEN
     return !!field && field.invalid && (field.dirty || field.touched);
   }
 
+  public onDatePickerChange(event: Event, fieldName: 'datumPocetka' | 'datumZavrsetka'): void {
+    const value = (event.target as HTMLInputElement).value;
+
+    if (!value) {
+      return;
+    }
+
+    this.budgetForm.patchValue({
+      [fieldName]: this.toDisplayDate(value),
+    });
+  }
+
   public hasInvalidPeriod(): boolean {
     const start = this.budgetForm.value.datumPocetka;
     const end = this.budgetForm.value.datumZavrsetka;
