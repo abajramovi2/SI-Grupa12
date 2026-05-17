@@ -317,7 +317,6 @@ private updateBudgetStatus(budget: Budget, statusOdobrenja: 'ODOBREN' | 'ODBIJEN
   private getErrorMessage(error: any, fallback: string): string {
     return error?.error?.message || error?.error?.error || fallback;
   }
-<<<<<<< HEAD
   searchQuery: string = '';
 
 get filteredBudgets() {
@@ -330,7 +329,6 @@ get filteredBudgets() {
     b.statusOdobrenja?.toLowerCase().includes(q)
   );
 }
-=======
 
   private toIsoDate(value: string): string {
     const match = value.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?$/);
@@ -354,5 +352,4 @@ get filteredBudgets() {
     const [, year, month, day] = match;
     return `${day}.${month}.${year}`;
   }
->>>>>>> main
 }
