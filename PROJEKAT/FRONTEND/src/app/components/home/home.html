@@ -182,9 +182,9 @@
 
             <label>
               Datum *
-              <input type="date" formControlName="datum" />
+              <input type="text" formControlName="datum" placeholder="dd.mm.yyyy" />
               @if (isEditFieldInvalid('datum')) {
-                <small>Datum je obavezan.</small>
+                <small>Datum je obavezan u formatu dd.mm.yyyy.</small>
               }
             </label>
 

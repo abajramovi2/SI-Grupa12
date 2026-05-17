@@ -48,13 +48,29 @@
  
         <div class="form-group">
           <label>Datum pocetka *</label>
-          <input type="date" formControlName="datumPocetka" />
-          <small *ngIf="isFieldInvalid('datumPocetka')">Datum pocetka je obavezan.</small>
+          <div class="date-inputs">
+            <input type="text" formControlName="datumPocetka" placeholder="dd.mm.yyyy" />
+            <input
+              type="date"
+              class="date-picker"
+              title="Odaberite datum pocetka"
+              (change)="onDatePickerChange($event, 'datumPocetka')"
+            />
+          </div>
+          <small *ngIf="isFieldInvalid('datumPocetka')">Datum pocetka je obavezan u formatu dd.mm.yyyy.</small>
         </div>
  
         <div class="form-group">
           <label>Datum zavrsetka *</label>
-          <input type="date" formControlName="datumZavrsetka" />
+          <div class="date-inputs">
+            <input type="text" formControlName="datumZavrsetka" placeholder="dd.mm.yyyy" />
+            <input
+              type="date"
+              class="date-picker"
+              title="Odaberite datum zavrsetka"
+              (change)="onDatePickerChange($event, 'datumZavrsetka')"
+            />
+          </div>
           <small *ngIf="isFieldInvalid('datumZavrsetka') || hasInvalidPeriod()">Period nije validan.</small>
         </div>
  
