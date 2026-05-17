@@ -317,6 +317,18 @@ private updateBudgetStatus(budget: Budget, statusOdobrenja: 'ODOBREN' | 'ODBIJEN
   private getErrorMessage(error: any, fallback: string): string {
     return error?.error?.message || error?.error?.error || fallback;
   }
+  searchQuery: string = '';
+
+get filteredBudgets() {
+  if (!this.searchQuery.trim()) return this.budgets;
+
+  const q = this.searchQuery.toLowerCase();
+  return this.budgets.filter(b =>
+    b.naziv?.toLowerCase().includes(q) ||
+    b.odjel?.toLowerCase().includes(q) ||
+    b.statusOdobrenja?.toLowerCase().includes(q)
+  );
+}
 
   private toIsoDate(value: string): string {
     const match = value.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?$/);
