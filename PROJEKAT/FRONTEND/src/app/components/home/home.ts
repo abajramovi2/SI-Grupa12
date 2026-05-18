@@ -31,6 +31,7 @@ export class HomeComponent implements OnInit {
   public readonly expenseRoles = ['admin', 'administrativni_radnik', 'administrativni_zaposlenik'];
   public readonly budgetRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
   public readonly dataOverviewRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
+  public readonly reportRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
   public readonly adminConsoleUrl = 'https://keycloak-production-4c61.up.railway.app/';
 
   public accessNotice = '';
@@ -82,6 +83,10 @@ export class HomeComponent implements OnInit {
     if (this.route.snapshot.queryParamMap.get('accessDenied') === 'pregled-podataka') {
       this.accessNotice = 'Pristup pregledu podataka je dozvoljen samo ulogama admin, glavni_racunovodja i finansijski_direktor.';
     }
+
+    if (this.route.snapshot.queryParamMap.get('accessDenied') === 'izvjestaji') {
+      this.accessNotice = 'Pristup izvjestajima je dozvoljen samo ulogama admin, glavni_racunovodja i finansijski_direktor.';
+    }
   }
 
   public get canOpenExpenses(): boolean {
@@ -93,6 +98,10 @@ export class HomeComponent implements OnInit {
 
   public get canOpenDataOverview(): boolean {
     return this.authService.hasAnyRole(this.dataOverviewRoles);
+  }
+
+  public get canOpenReports(): boolean {
+    return this.authService.hasAnyRole(this.reportRoles);
   }
 
   public get isAdmin(): boolean {
@@ -308,6 +317,15 @@ export class HomeComponent implements OnInit {
     }
 
     void this.router.navigate(['/podaci/pregled']);
+  }
+
+  public idiNaIzvjestaje(): void {
+    if (!this.canOpenReports) {
+      this.accessNotice = 'Pristup izvjestajima je dozvoljen samo ulogama admin, glavni_racunovodja i finansijski_direktor.';
+      return;
+    }
+
+    void this.router.navigate(['/izvjestaji']);
   }
 
   private buildBreakdown(fieldName: 'kategorija' | 'odjel'): ExpenseBreakdown[] {
