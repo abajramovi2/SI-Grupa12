@@ -14,6 +14,7 @@ const { registerExpenseEndpoints } = require("./PRESENTATION API/Endpoints/Expen
 const { registerIngestionEndpoints } = require("./PRESENTATION API/Endpoints/IngestionEndpoints");
 const { registerBudgetEndpoints } = require("./PRESENTATION API/Endpoints/BudgetEndpoints");
 const { registerDataOverviewEndpoints } = require("./PRESENTATION API/Endpoints/DataOverviewEndpoints");
+const { registerReportEndpoints } = require("./PRESENTATION API/Endpoints/ReportEndpoints");
 
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -268,6 +269,7 @@ function startServer() {
   registerExpenseEndpoints(app, authService, writeLog);
   registerBudgetEndpoints(app, authService, writeLog);
   registerDataOverviewEndpoints(app, authService, writeLog);
+  registerReportEndpoints(app, authService, writeLog);
   registerIngestionEndpoints(app, authService, writeLog);
   registerUserEndpoints(app, authService);
 

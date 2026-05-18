@@ -6,6 +6,7 @@ import { ExpensesComponent } from './components/expenses/expenses';
 import { ExpenseImportComponent } from './components/expense-import/expense-import.component';
 import { BudgetPlanningComponent } from './components/budget-planning/budget-planning';
 import { DataOverviewComponent } from './components/data-overview/data-overview';
+import { ReportsComponent } from './components/reports/reports';
 import { HomeComponent } from './components/home/home';
 import { RoleAccessComponent } from './components/role-access/role-access';
 import { AuthGuardService } from '../middleware/middleware.authguard';
@@ -13,6 +14,7 @@ import { AuthGuardService } from '../middleware/middleware.authguard';
 const expenseRoles = ['admin', 'administrativni_radnik', 'administrativni_zaposlenik'];
 const budgetViewRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
 const dataOverviewRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
+const reportRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
 
 const requireAuth = () => {
   const authService = inject(AuthGuardService);
@@ -76,6 +78,23 @@ const canOpenDataOverview = () => {
   });
 };
 
+const canOpenReports = () => {
+  const authService = inject(AuthGuardService);
+  const router = inject(Router);
+
+  if (!authService.isAuthenticated()) {
+    return router.createUrlTree(['/']);
+  }
+
+  if (authService.hasAnyRole(reportRoles)) {
+    return true;
+  }
+
+  return router.createUrlTree(['/home'], {
+    queryParams: { accessDenied: 'izvjestaji' },
+  });
+};
+
 export const routes: Routes = [
   { path: '', component: Homepage },
   { path: 'home', component: HomeComponent, canActivate: [requireAuth] },
@@ -83,6 +102,7 @@ export const routes: Routes = [
   { path: 'troskovi/import', component: ExpenseImportComponent, canActivate: [canOpenExpenses] },
   { path: 'budzeti', component: BudgetPlanningComponent, canActivate: [canOpenBudgets] },
   { path: 'podaci/pregled', component: DataOverviewComponent, canActivate: [canOpenDataOverview] },
+  { path: 'izvjestaji', component: ReportsComponent, canActivate: [canOpenReports] },
   {
     path: 'profile',
     component: RoleAccessComponent,

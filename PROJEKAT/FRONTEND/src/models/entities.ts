@@ -169,3 +169,50 @@ export interface DataOverview {
   projekti: DataOverviewProject[];
   dobavljaci: DataOverviewSupplier[];
 }
+
+export interface ReportFilters {
+  datumOd?: string;
+  datumDo?: string;
+  tipIzvjestaja?: ReportType;
+}
+
+export type ReportExportFormat = 'xlsx' | 'csv' | 'pdf';
+export type ReportType = 'sazeti' | 'detaljni';
+
+export interface ReportBreakdownItem {
+  label: string;
+  total: number;
+  count: number;
+  average: number;
+  percentage: number;
+}
+
+export interface ExpenseReportSummary {
+  totalExpenses: number;
+  totalAmount: number;
+  averageAmount: number;
+  budgetCount: number;
+  budgetTotal: number;
+  budgetUtilizationPercent: number | null;
+  highestExpense: DataOverviewExpense | null;
+  lowestExpense: DataOverviewExpense | null;
+  topCategory: ReportBreakdownItem | null;
+  topDepartment: ReportBreakdownItem | null;
+}
+
+export interface ExpenseReport {
+  generatedAt: string;
+  period: {
+    datumOd: string | null;
+    datumDo: string | null;
+  };
+  summary: ExpenseReportSummary;
+  breakdowns: {
+    byCategory: ReportBreakdownItem[];
+    byDepartment: ReportBreakdownItem[];
+    byCurrency: ReportBreakdownItem[];
+    byStatus: ReportBreakdownItem[];
+    byMonth: ReportBreakdownItem[];
+  };
+  expenses: DataOverviewExpense[];
+}

@@ -1,0 +1,257 @@
+<div class="reports-page">
+  <section class="reports-header">
+    <div>
+      <p class="eyebrow">Izvjestaji</p>
+      <h1>Izvjestaj o troskovima</h1>
+      <p class="lead">{{ periodLabel }}</p>
+    </div>
+
+    <div class="header-actions">
+      <button type="button" class="secondary-action" (click)="loadReport()" [disabled]="isLoading">
+        {{ isLoading ? 'Generisanje...' : 'Generisi ' + selectedReportTypeLabel.toLowerCase() }}
+      </button>
+      <button type="button" class="export-action" (click)="exportReport('xlsx')" [disabled]="isExporting || !report">
+        {{ selectedReportTypeLabel }} Excel
+      </button>
+      <button type="button" class="export-action" (click)="exportReport('pdf')" [disabled]="isExporting || !report">
+        {{ selectedReportTypeLabel }} PDF
+      </button>
+      <button type="button" class="export-action" (click)="exportReport('csv')" [disabled]="isExporting || !report">
+        {{ selectedReportTypeLabel }} CSV
+      </button>
+    </div>
+  </section>
+
+  <section class="filter-panel">
+    <div class="report-type-group" aria-label="Tip izvjestaja">
+      <span>Tip izvjestaja</span>
+      <div class="segmented-control">
+        <button
+          type="button"
+          [class.active]="reportType === 'sazeti'"
+          (click)="selectReportType('sazeti')"
+        >
+          Sazeti
+        </button>
+        <button
+          type="button"
+          [class.active]="reportType === 'detaljni'"
+          (click)="selectReportType('detaljni')"
+        >
+          Detaljni
+        </button>
+      </div>
+    </div>
+    <label>
+      Period od
+      <div class="date-inputs">
+        <input
+          type="text"
+          [value]="dateFrom"
+          (input)="dateFrom = $any($event.target).value"
+          placeholder="dd.mm.yyyy"
+        />
+        <input
+          type="date"
+          class="date-picker"
+          title="Odaberite pocetni datum"
+          [value]="toNativeDate(dateFrom)"
+          (change)="onPeriodDatePickerChange('from', $event)"
+        />
+      </div>
+    </label>
+    <label>
+      Period do
+      <div class="date-inputs">
+        <input
+          type="text"
+          [value]="dateTo"
+          (input)="dateTo = $any($event.target).value"
+          placeholder="dd.mm.yyyy"
+        />
+        <input
+          type="date"
+          class="date-picker"
+          title="Odaberite krajnji datum"
+          [value]="toNativeDate(dateTo)"
+          (change)="onPeriodDatePickerChange('to', $event)"
+        />
+      </div>
+    </label>
+    <div class="filter-action">
+      <button type="button" class="secondary-action" (click)="resetPeriod()" [disabled]="isLoading">
+        Resetuj period
+      </button>
+    </div>
+  </section>
+
+  @if (errorMessage) {
+    <p class="notice error-notice">{{ errorMessage }}</p>
+  }
+
+  @if (successMessage) {
+    <p class="notice success-notice">{{ successMessage }}</p>
+  }
+
+  @if (isLoading) {
+    <section class="panel empty-state">
+      <strong>Generisanje izvjestaja...</strong>
+    </section>
+  } @else if (report; as currentReport) {
+    <section class="metric-grid" aria-label="Sazetak izvjestaja">
+      <article class="metric-card">
+        <span>Ukupno troskova</span>
+        <strong>{{ currentReport.summary.totalExpenses }}</strong>
+      </article>
+      <article class="metric-card">
+        <span>Ukupni iznos</span>
+        <strong>{{ formatAmount(currentReport.summary.totalAmount) }}</strong>
+        <small>BAM</small>
+      </article>
+      <article class="metric-card">
+        <span>Prosjecan trosak</span>
+        <strong>{{ formatAmount(currentReport.summary.averageAmount) }}</strong>
+        <small>BAM</small>
+      </article>
+      <article class="metric-card">
+        <span>Ukupni budzet</span>
+        <strong>{{ formatAmount(currentReport.summary.budgetTotal) }}</strong>
+        <small>{{ currentReport.summary.budgetCount }} budzeta</small>
+      </article>
+      <article class="metric-card">
+        <span>Iskoristenost budzeta</span>
+        <strong>{{ utilizationLabel }}</strong>
+      </article>
+      <article class="metric-card">
+        <span>Top kategorija</span>
+        <strong>{{ currentReport.summary.topCategory?.label || '-' }}</strong>
+      </article>
+      <article class="metric-card">
+        <span>Top odjel</span>
+        <strong>{{ currentReport.summary.topDepartment?.label || '-' }}</strong>
+      </article>
+      <article class="metric-card">
+        <span>Najveci trosak</span>
+        <strong>{{ currentReport.summary.highestExpense?.naziv || '-' }}</strong>
+        <small>{{ formatAmount(currentReport.summary.highestExpense?.iznos) }}</small>
+      </article>
+    </section>
+
+    <section class="report-grid">
+      <article class="panel">
+        <div class="panel-heading">
+          <h2>Troskovi po kategorijama</h2>
+          <span>{{ currentReport.breakdowns.byCategory.length }}</span>
+        </div>
+        @if (currentReport.breakdowns.byCategory.length === 0) {
+          <div class="empty-state compact-state"><strong>Nema podataka.</strong></div>
+        } @else {
+          <div class="bar-list">
+            @for (item of currentReport.breakdowns.byCategory; track item.label) {
+              <div class="bar-row">
+                <div>
+                  <strong>{{ item.label }}</strong>
+                  <small>{{ item.count }} zapisa</small>
+                </div>
+                <div class="bar-track"><span [style.width.%]="item.percentage"></span></div>
+                <b>{{ formatAmount(item.total) }}</b>
+              </div>
+            }
+          </div>
+        }
+      </article>
+
+      <article class="panel">
+        <div class="panel-heading">
+          <h2>Troskovi po odjelima</h2>
+          <span>{{ currentReport.breakdowns.byDepartment.length }}</span>
+        </div>
+        @if (currentReport.breakdowns.byDepartment.length === 0) {
+          <div class="empty-state compact-state"><strong>Nema podataka.</strong></div>
+        } @else {
+          <div class="bar-list">
+            @for (item of currentReport.breakdowns.byDepartment; track item.label) {
+              <div class="bar-row">
+                <div>
+                  <strong>{{ item.label }}</strong>
+                  <small>{{ item.count }} zapisa</small>
+                </div>
+                <div class="bar-track green-track"><span [style.width.%]="item.percentage"></span></div>
+                <b>{{ formatAmount(item.total) }}</b>
+              </div>
+            }
+          </div>
+        }
+      </article>
+
+      <article class="panel wide-panel">
+        <div class="panel-heading">
+          <h2>Trend po mjesecima</h2>
+          <span>{{ sortedMonthlyTrend.length }}</span>
+        </div>
+        @if (sortedMonthlyTrend.length === 0) {
+          <div class="empty-state compact-state"><strong>Nema podataka.</strong></div>
+        } @else {
+          <div class="trend-grid">
+            @for (item of sortedMonthlyTrend; track item.label) {
+              <div class="trend-item">
+                <span>{{ item.label }}</span>
+                <strong>{{ formatAmount(item.total) }}</strong>
+                <small>Ukupno za mjesec</small>
+                <small>{{ item.count }} troskova</small>
+                <small>Prosjek: {{ formatAmount(item.average) }}</small>
+              </div>
+            }
+          </div>
+        }
+      </article>
+    </section>
+
+    @if (isDetailedReport) {
+    <section class="panel wide-panel">
+      <div class="panel-heading">
+        <h2>Relevantni troskovi</h2>
+        <span>{{ currentReport.expenses.length }} zapisa</span>
+      </div>
+
+      @if (!hasExpenses) {
+        <div class="empty-state compact-state">
+          <strong>Nema troskova za odabrani period.</strong>
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Naziv</th>
+                <th>Iznos</th>
+                <th>Datum</th>
+                <th>Kategorija</th>
+                <th>Odjel</th>
+                <th>Valuta</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (expense of visibleExpenses; track expense.id) {
+                <tr>
+                  <td><strong>{{ expense.naziv }}</strong></td>
+                  <td>{{ formatAmount(expense.iznos) }}</td>
+                  <td>{{ formatDate(expense.datum) }}</td>
+                  <td>{{ expense.kategorijaNaziv || '-' }}</td>
+                  <td>{{ expense.odjelNaziv || '-' }}</td>
+                  <td>{{ expense.valutaKod || '-' }}</td>
+                  <td><span class="status-pill">{{ expense.statusValidacije || '-' }}</span></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (currentReport.expenses.length > visibleExpenses.length) {
+          <p class="table-note">Prikazano je prvih {{ visibleExpenses.length }} od {{ currentReport.expenses.length }} zapisa.</p>
+        }
+      }
+    </section>
+    }
+  }
+</div>
