@@ -173,7 +173,7 @@ Sistem ne smije prikazati grešku tokom izvoza
 
 #### ID: 25
 #### Naziv: Sažeti izvještaj
-Kao menadžer želim vidjeti sažeti prikaz ključnih informacija
+Kao finansijski direktor želim vidjeti sažeti prikaz ključnih informacija
 
 **Sprint:** 8
 
