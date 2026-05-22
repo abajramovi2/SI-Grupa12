@@ -45,8 +45,6 @@ h2 {
   color: #667085;
 }
  
-/* ── SEARCH BAR ── */
- 
 .search-bar {
   margin-top: 16px;
 }
@@ -84,8 +82,6 @@ h2 {
   min-height: 40px;
   font-size: 14px;
 }
- 
-/* ── FILTER ROW ── */
  
 .filter-row {
   display: flex;
@@ -160,8 +156,6 @@ h2 {
   background: #fecdca;
 }
  
-/* ── RANGE FILTER ── */
- 
 .range-filter {
   display: flex;
   gap: 24px;
@@ -194,8 +188,6 @@ h2 {
   cursor: pointer;
 }
  
-/* ── SORTABLE TABLE ── */
- 
 th.sortable {
   cursor: pointer;
   user-select: none;
@@ -212,8 +204,6 @@ th.sortable span {
   font-size: 11px;
 }
  
-/* ── BUTTONS ── */
- 
 .secondary-action {
   display: inline-flex;
   align-items: center;
@@ -226,8 +216,55 @@ th.sortable span {
   background: #ffffff;
   font-weight: 900;
 }
- 
-/* ── NOTICES ── */
+
+.secondary-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.compact-action {
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.selection-count {
+  color: #667085;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.compare-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  color: #ffffff;
+  background: #1769ff;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.compare-action:hover:not(:disabled) {
+  background: #0f56d9;
+}
+
+.compare-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
  
 .notice {
   margin: 0;
@@ -243,8 +280,6 @@ th.sortable span {
   background: #fff1f3;
   border-color: #fecdca;
 }
- 
-/* ── METRIC GRID ── */
  
 .metric-grid {
   display: grid;
@@ -278,8 +313,6 @@ th.sortable span {
   line-height: 1.1;
 }
  
-/* ── PANEL ── */
- 
 .panel {
   padding: 16px;
 }
@@ -300,8 +333,6 @@ th.sortable span {
   font-size: 12px;
   font-weight: 900;
 }
- 
-/* ── TABLE ── */
  
 .table-wrap {
   width: 100%;
@@ -332,6 +363,15 @@ th {
   font-size: 12px;
   font-weight: 900;
 }
+
+.col-check {
+  width: 50px;
+  text-align: center;
+}
+
+.col-check input[type="checkbox"] {
+  cursor: pointer;
+}
  
 tbody tr:last-child td {
   border-bottom: 0;
@@ -346,7 +386,13 @@ tbody tr:last-child td {
 .clickable-row:focus-visible td {
   background: #f8fbff;
 }
- 
+
+.selected-row td,
+.selected-row:hover td,
+.selected-row:focus-visible td {
+  background: #eef4ff;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -358,8 +404,6 @@ tbody tr:last-child td {
   font-size: 11px;
   font-weight: 900;
 }
- 
-/* ── REFERENCE GRID ── */
  
 .reference-grid {
   display: grid;
@@ -408,8 +452,6 @@ tbody tr:last-child td {
   line-height: 1.35;
 }
  
-/* ── EMPTY STATE ── */
- 
 .empty-state {
   display: grid;
   place-items: center;
@@ -422,8 +464,6 @@ tbody tr:last-child td {
 .empty-state strong {
   color: #344054;
 }
- 
-/* ── DETAIL PANEL ── */
  
 .detail-overlay {
   position: fixed;
@@ -494,8 +534,6 @@ tbody tr:last-child td {
   overflow-x: auto;
 }
  
-/* ── RESPONSIVE ── */
- 
 @media (max-width: 1200px) {
   .metric-grid {
     grid-template-columns: repeat(3, minmax(150px, 1fr));
@@ -527,7 +565,15 @@ tbody tr:last-child td {
  
   .filter-row select,
   .date-filter-group input[type="date"],
-  .btn-reset {
+  .btn-reset,
+  .compare-action,
+  .compact-action {
     width: 100%;
   }
+
+  .selection-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
 }

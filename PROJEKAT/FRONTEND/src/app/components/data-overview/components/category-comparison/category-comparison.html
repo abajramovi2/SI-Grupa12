@@ -1,0 +1,164 @@
+<section class="comparison-panel category-compare-controls" aria-label="Grupno poredjenje troskova po kategorijama">
+  <div class="panel-heading">
+    <div>
+      <h2>Grupno poredjenje</h2>
+      <p class="comparison-note">Odaberite po cemu zelite porediti troskove. Ako nista nije odabrano, porede se svi dostupni podaci.</p>
+    </div>
+    <button type="button" class="secondary-action compact-action" (click)="closePanel.emit()">
+      Zatvori
+    </button>
+  </div>
+
+  <div class="comparison-mode-row" aria-label="Nacin grupnog poredjenja">
+    <label class="category-option" [class.category-option-selected]="comparisonMode === 'category'">
+      <input type="radio" name="comparisonMode" [checked]="comparisonMode === 'category'" (change)="setComparisonMode('category')" />
+      <span>Po kategoriji</span>
+    </label>
+    <label class="category-option" [class.category-option-selected]="comparisonMode === 'department'">
+      <input type="radio" name="comparisonMode" [checked]="comparisonMode === 'department'" (change)="setComparisonMode('department')" />
+      <span>Po odjelu</span>
+    </label>
+    <label class="category-option" [class.category-option-selected]="comparisonMode === 'categoryDepartment'">
+      <input type="radio" name="comparisonMode" [checked]="comparisonMode === 'categoryDepartment'" (change)="setComparisonMode('categoryDepartment')" />
+      <span>Po kategoriji i odjelu</span>
+    </label>
+    <label class="category-option" [class.category-option-selected]="comparisonMode === 'period'">
+      <input type="radio" name="comparisonMode" [checked]="comparisonMode === 'period'" (change)="setComparisonMode('period')" />
+      <span>Po periodu</span>
+    </label>
+  </div>
+
+  <div class="category-compare-grid">
+    <div class="date-filter-group">
+      <label>Datum od</label>
+      <input type="date" [value]="dateFrom" (change)="dateFromChange.emit($any($event.target).value)" />
+    </div>
+
+    <div class="date-filter-group">
+      <label>Datum do</label>
+      <input type="date" [value]="dateTo" (change)="dateToChange.emit($any($event.target).value)" />
+    </div>
+  </div>
+
+  @if (comparisonMode === 'category' || comparisonMode === 'categoryDepartment') {
+    <div class="category-picker">
+      @for (category of categoryOptions; track category) {
+        <label class="category-option" [class.category-option-selected]="isCategorySelected(category)">
+          <input
+            type="checkbox"
+            [checked]="isCategorySelected(category)"
+            (change)="toggleCategory(category)" />
+          <span>{{ category }}</span>
+        </label>
+      }
+    </div>
+  }
+
+  @if (comparisonMode === 'department' || comparisonMode === 'categoryDepartment') {
+    <div class="category-picker">
+      @for (department of departmentOptions; track department) {
+        <label class="category-option" [class.category-option-selected]="isDepartmentSelected(department)">
+          <input
+            type="checkbox"
+            [checked]="isDepartmentSelected(department)"
+            (change)="toggleDepartment(department)" />
+          <span>{{ department }}</span>
+        </label>
+      }
+    </div>
+  }
+
+  <div class="selection-actions">
+    <span class="selection-count">{{ selectedGroupCountLabel }}</span>
+    <button
+      type="button"
+      class="secondary-action compact-action"
+      [disabled]="selectedCategories.size === 0 && selectedDepartments.size === 0 && !dateFrom && !dateTo && comparisonMode === 'category'"
+      (click)="clearComparison()">
+      Ocisti grupno poredjenje
+    </button>
+  </div>
+
+  @if (!canCompare) {
+    <div class="empty-state compact-state">
+      <strong>{{ emptySelectionMessage }}</strong>
+    </div>
+  } @else {
+    <div class="comparison-summary">
+      <article>
+        <span>Ukupan iznos u KM</span>
+        <strong>{{ totalAmount | number: '1.2-2' }} KM</strong>
+      </article>
+      <article>
+        <span>Broj troskova</span>
+        <strong>{{ expenseCount }}</strong>
+      </article>
+      <article>
+        <span>Prosjek u KM</span>
+        <strong>{{ averageAmount === null ? '-' : (averageAmount | number: '1.2-2') + ' KM' }}</strong>
+      </article>
+      <article>
+        <span>Najveca grupa</span>
+        <strong>{{ highestCategoryName }}</strong>
+      </article>
+      <article>
+        <span>Najmanja grupa</span>
+        <strong>{{ lowestCategoryName }}</strong>
+      </article>
+    </div>
+
+    @if (rows.length === 0) {
+      <div class="empty-state compact-state">
+        <strong>Nema troskova za odabrane kategorije i period.</strong>
+      </div>
+    } @else {
+      <div class="category-comparison-bars">
+        @for (row of rows; track row.groupName) {
+          <div
+            class="category-bar-row"
+            [class.top-category-row]="isHighestRow(row)"
+            [class.low-category-row]="isLowestRow(row)">
+            <div class="category-bar-label">
+              <strong>{{ row.groupName }}</strong>
+              <span>{{ row.totalAmountBam | number: '1.2-2' }} KM</span>
+            </div>
+            <div class="category-bar-track" aria-hidden="true">
+              <div class="category-bar-fill" [style.width]="getBarWidth(row)"></div>
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{{ groupColumnLabel }}</th>
+              <th>Broj troskova</th>
+              <th>Ukupno KM</th>
+              <th>Prosjek KM</th>
+              <th>Najveci trosak KM</th>
+              <th>Najmanji trosak KM</th>
+              <th>Udio</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows; track row.groupName) {
+              <tr
+                [class.top-category-row]="isHighestRow(row)"
+                [class.low-category-row]="isLowestRow(row)">
+                <td>{{ row.groupName }}</td>
+                <td>{{ row.expenseCount }}</td>
+                <td>{{ row.totalAmountBam | number: '1.2-2' }}</td>
+                <td>{{ row.averageAmountBam | number: '1.2-2' }}</td>
+                <td>{{ row.highestAmountBam | number: '1.2-2' }}</td>
+                <td>{{ row.lowestAmountBam | number: '1.2-2' }}</td>
+                <td>{{ row.percentage | number: '1.1-1' }}%</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</section>

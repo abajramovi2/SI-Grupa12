@@ -12,6 +12,11 @@ import {
 } from '../../../models/entities';
 import { DataOverviewService } from '../../../services/data-overview.service';
 import { IngestionService, ImportHistoryEntry } from '../../../services/ingestion.service';
+import { CategoryComparisonComponent } from './components/category-comparison/category-comparison';
+import { PlannedActualComparisonComponent } from './components/planned-actual-comparison/planned-actual-comparison';
+import { SelectedExpenseComparisonComponent } from './components/selected-expense-comparison/selected-expense-comparison';
+
+type GroupComparisonMode = 'category' | 'department' | 'categoryDepartment' | 'period';
 
 type DetailField = {
   label: string;
@@ -29,7 +34,7 @@ type SelectedDetail = {
 @Component({
   selector: 'app-data-overview',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, SelectedExpenseComparisonComponent, CategoryComparisonComponent, PlannedActualComparisonComponent],
   templateUrl: './data-overview.html',
   styleUrl: './data-overview.css',
 })
@@ -45,6 +50,19 @@ export class DataOverviewComponent implements OnInit {
   public importHistoryMessage = '';
   public importHistory: ImportHistoryEntry[] = [];
   public selectedDetail: SelectedDetail | null = null;
+  public selectedExpenseIds: Set<string | number> = new Set();
+  public isComparisonPanelOpen = false;
+  public isCategoryComparisonPanelOpen = false;
+  public isPlannedActualComparisonPanelOpen = false;
+  public categoryComparisonSelectedCategories: Set<string> = new Set();
+  public categoryComparisonSelectedDepartments: Set<string> = new Set();
+  public categoryComparisonDateFrom = '';
+  public categoryComparisonDateTo = '';
+  public categoryComparisonMode: GroupComparisonMode = 'category';
+  public plannedActualSelectedCategories: Set<string> = new Set();
+  public plannedActualSelectedDepartments: Set<string> = new Set();
+  public plannedActualDateFrom = '';
+  public plannedActualDateTo = '';
 
   public ngOnInit(): void {
     this.loadOverview();
@@ -63,10 +81,20 @@ export class DataOverviewComponent implements OnInit {
     return Object.values(this.overview).some((items) => items.length > 0);
   }
 
+  public get selectedExpenses(): DataOverviewExpense[] {
+    return this.overview.troskovi.filter((expense) => this.selectedExpenseIds.has(expense.id));
+  }
+
+  public get canCompareExpenses(): boolean {
+    return this.selectedExpenseIds.size >= 2;
+  }
+
   public loadOverview(): void {
     this.isLoading = true;
     this.errorMessage = '';
     this.selectedDetail = null;
+    this.clearExpenseSelection();
+    this.isComparisonPanelOpen = false;
 
     this.dataOverviewService.getOverview().subscribe({
       next: (overview) => {
@@ -113,6 +141,74 @@ export class DataOverviewComponent implements OnInit {
 
   public getExpenseCurrency(expense: DataOverviewExpense): string {
     return expense.valutaKod || expense.valutaNaziv || '-';
+  }
+
+  public isExpenseSelected(expenseId: string | number): boolean {
+    return this.selectedExpenseIds.has(expenseId);
+  }
+
+  public toggleExpenseSelection(expense: DataOverviewExpense): void {
+    if (this.selectedExpenseIds.has(expense.id)) {
+      this.selectedExpenseIds.delete(expense.id);
+    } else {
+      this.selectedExpenseIds.add(expense.id);
+    }
+
+    if (!this.canCompareExpenses) {
+      this.isComparisonPanelOpen = false;
+    }
+  }
+
+  public areAllFilteredExpensesSelected(): boolean {
+    return this.filteredExpenses.length > 0 && this.filteredExpenses.every((expense) => this.selectedExpenseIds.has(expense.id));
+  }
+
+  public selectAllFilteredExpenses(): void {
+    if (this.areAllFilteredExpensesSelected()) {
+      this.filteredExpenses.forEach((expense) => this.selectedExpenseIds.delete(expense.id));
+    } else {
+      this.filteredExpenses.forEach((expense) => this.selectedExpenseIds.add(expense.id));
+    }
+
+    if (!this.canCompareExpenses) {
+      this.isComparisonPanelOpen = false;
+    }
+  }
+
+  public clearExpenseSelection(): void {
+    this.selectedExpenseIds.clear();
+    this.isComparisonPanelOpen = false;
+  }
+
+  public openComparisonPanel(): void {
+    if (!this.canCompareExpenses) {
+      return;
+    }
+
+    this.selectedDetail = null;
+    this.isComparisonPanelOpen = true;
+  }
+
+  public closeComparisonPanel(): void {
+    this.isComparisonPanelOpen = false;
+  }
+
+  public openCategoryComparisonPanel(): void {
+    this.selectedDetail = null;
+    this.isCategoryComparisonPanelOpen = true;
+  }
+
+  public closeCategoryComparisonPanel(): void {
+    this.isCategoryComparisonPanelOpen = false;
+  }
+
+  public openPlannedActualComparisonPanel(): void {
+    this.selectedDetail = null;
+    this.isPlannedActualComparisonPanelOpen = true;
+  }
+
+  public closePlannedActualComparisonPanel(): void {
+    this.isPlannedActualComparisonPanelOpen = false;
   }
 
   public openExpenseDetails(expense: DataOverviewExpense): void {
@@ -326,8 +422,9 @@ export class DataOverviewComponent implements OnInit {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const year = date.getFullYear();
 
-    return `${day}.${month}.${year}`;
+    return `${day}/${month}/${year}`;
   }
+
   sectionSearch: string = '';
 
 showSection(name: string): boolean {

@@ -1,0 +1,71 @@
+<section class="comparison-panel" aria-label="Poredjenje odabranih troskova">
+  <div class="panel-heading">
+    <div>
+      <h2>Poredjenje odabranih troskova</h2>
+      <p class="comparison-note">{{ expenses.length }} troskova spremno za poredjenje</p>
+    </div>
+    <button type="button" class="secondary-action compact-action" (click)="closePanel.emit()">
+      Zatvori
+    </button>
+  </div>
+
+  <div class="comparison-summary">
+    <article>
+      <span>Ukupan iznos u KM</span>
+      <strong>{{ totalAmount | number: '1.2-2' }} KM</strong>
+    </article>
+    <article>
+      <span>Najveci trosak u KM</span>
+      <strong>{{ highestAmount === null ? '-' : (highestAmount | number: '1.2-2') + ' KM' }}</strong>
+    </article>
+    <article>
+      <span>Najmanji trosak u KM</span>
+      <strong>{{ lowestAmount === null ? '-' : (lowestAmount | number: '1.2-2') + ' KM' }}</strong>
+    </article>
+    <article>
+      <span>Prosjecan trosak u KM</span>
+      <strong>{{ averageAmount === null ? '-' : (averageAmount | number: '1.2-2') + ' KM' }}</strong>
+    </article>
+    <article>
+      <span>Razlika najveci - najmanji u KM</span>
+      <strong>{{ amountDifference === null ? '-' : (amountDifference | number: '1.2-2') + ' KM' }}</strong>
+    </article>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Naziv</th>
+          <th>Originalni iznos</th>
+          <th>Iznos u KM</th>
+          <th>Datum</th>
+          <th>Kategorija</th>
+          <th>Odjel</th>
+          <th>Valuta</th>
+          <th>Projekat</th>
+          <th>Dobavljac</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (expense of expenses; track expense.id) {
+          <tr
+            [class.highest-expense-row]="isHighestExpense(expense)"
+            [class.lowest-expense-row]="isLowestExpense(expense)">
+            <td>{{ expense.naziv }}</td>
+            <td>{{ expense.iznos | number: '1.2-2' }} {{ getExpenseCurrency(expense) }}</td>
+            <td>{{ getExpenseAmountInBam(expense) | number: '1.2-2' }} KM</td>
+            <td>{{ expense.datum | date: 'dd/MM/yyyy' }}</td>
+            <td>{{ expense.kategorijaNaziv || '-' }}</td>
+            <td>{{ expense.odjelNaziv || '-' }}</td>
+            <td>{{ getExpenseCurrency(expense) }}</td>
+            <td>{{ expense.projekatNaziv || '-' }}</td>
+            <td>{{ expense.dobavljacNaziv || '-' }}</td>
+            <td><span class="status-pill">{{ expense.statusValidacije || '-' }}</span></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
