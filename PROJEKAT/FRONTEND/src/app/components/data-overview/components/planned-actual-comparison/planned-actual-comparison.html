@@ -1,0 +1,111 @@
+<section class="comparison-panel" aria-label="Poredjenje planiranih i stvarnih troskova">
+  <div class="panel-heading">
+    <div>
+      <h2>Planirani i stvarni troskovi</h2>
+      <p class="comparison-note">Odaberite kategorije, odjele i period za prikaz odstupanja.</p>
+    </div>
+    <button type="button" class="secondary-action compact-action" (click)="closePanel.emit()">Zatvori</button>
+  </div>
+
+  <div class="date-row">
+    <label>
+      Datum od
+      <input type="date" [value]="dateFrom" (change)="dateFromChange.emit($any($event.target).value)" />
+    </label>
+    <label>
+      Datum do
+      <input type="date" [value]="dateTo" (change)="dateToChange.emit($any($event.target).value)" />
+    </label>
+  </div>
+
+  <section class="filter-group" aria-label="Kategorije">
+    <h3>Kategorije</h3>
+    <div class="picker">
+      @for (category of categoryOptions; track category) {
+        <label class="option" [class.option-selected]="isCategorySelected(category)">
+          <input type="checkbox" [checked]="isCategorySelected(category)" (change)="toggleCategory(category)" />
+          <span>{{ category }}</span>
+        </label>
+      }
+    </div>
+  </section>
+
+  <section class="filter-group" aria-label="Odjeli">
+    <h3>Odjeli</h3>
+    <div class="picker">
+      @for (department of departmentOptions; track department) {
+        <label class="option" [class.option-selected]="isDepartmentSelected(department)">
+          <input type="checkbox" [checked]="isDepartmentSelected(department)" (change)="toggleDepartment(department)" />
+          <span>{{ department }}</span>
+        </label>
+      }
+    </div>
+  </section>
+
+  <div class="actions">
+    <span>{{ selectedCategories.size }} kategorija, {{ selectedDepartments.size }} odjela</span>
+    <button
+      type="button"
+      class="secondary-action compact-action"
+      [disabled]="selectedCategories.size === 0 && selectedDepartments.size === 0 && !dateFrom && !dateTo"
+      (click)="clearComparison()">
+      Ocisti poredjenje
+    </button>
+<p class="comparison-legend">
+  Pozitivno odstupanje znači da je stvarna potrošnja veća od planirane,
+  dok negativno odstupanje znači da budžet nije u potpunosti iskorišten.
+</p>
+    </div>
+  
+<div class="summary">
+    <article>
+      <span>Planirano</span>
+      <strong>{{ totalPlannedAmount | number: '1.2-2' }} KM</strong>
+    </article>
+    <article>
+      <span>Stvarno</span>
+      <strong>{{ totalActualAmount | number: '1.2-2' }} KM</strong>
+    </article>
+    <article [class]="getVarianceClass(totalVariance)">
+      <span>Odstupanje</span>
+      <strong>{{ totalVariance | number: '1.2-2' }} KM</strong>
+    </article>
+    <article>
+      <span>Iskoristenost</span>
+      <strong>{{ totalUtilization === null ? '-' : (totalUtilization | number: '1.1-1') + '%' }}</strong>
+    </article>
+  </div>
+
+  @if (rows.length === 0) {
+    <div class="empty-state">
+      <strong>Nema planiranih ili stvarnih troskova za odabrane filtere.</strong>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Kategorija / odjel</th>
+            <th>Planirano KM</th>
+            <th>Stvarno KM</th>
+            <th>Odstupanje KM</th>
+            <th>Iskoristenost</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows; track row.groupName) {
+            <tr [class]="getVarianceClass(row.variance)">
+              <td>{{ row.groupName }}</td>
+              <td>{{ row.plannedAmount | number: '1.2-2' }}</td>
+              <td>{{ row.actualAmount | number: '1.2-2' }}</td>
+              <td>{{ row.variance | number: '1.2-2' }}</td>
+              <td>{{ row.utilization === null ? '-' : (row.utilization | number: '1.1-1') + '%' }}</td>
+              <td><span class="status-pill" [class]="getStatusClass(row.status)">{{ row.status }}</span></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
