@@ -59,7 +59,7 @@ async function ensureDockerServices() {
   const composeFile = path.resolve(__dirname, "docker-compose.yml");
 
   try {
-    execSync(`docker compose -f "${composeFile}" up -d postgres keycloak`, {
+    execSync(`docker compose -f "${composeFile}" up -d`, {
       stdio: "inherit",
     });
   } catch (error) {
