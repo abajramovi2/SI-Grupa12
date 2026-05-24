@@ -297,3 +297,133 @@ th {
     flex-direction: column;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Real-time validation warnings and anomaly detection
+   ───────────────────────────────────────────────────────────── */
+
+.validation-section {
+  margin-top: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+}
+
+.validation-loading {
+  text-align: center;
+  color: #78350f;
+  font-weight: 600;
+  padding: 8px 0;
+}
+
+.validation-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.validation-warnings h3 {
+  margin: 0 0 8px 0;
+  color: #92400e;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.warning-intro {
+  margin: 0 0 12px 0;
+  color: #78350f;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.warning-item {
+  padding: 12px;
+  border-left: 4px solid #f59e0b;
+  background: #fffbeb;
+  border-radius: 4px;
+}
+
+.warning-item.warning-HIGH {
+  border-left-color: #dc2626;
+  background: #fee2e2;
+}
+
+.warning-item.warning-MEDIUM {
+  border-left-color: #f59e0b;
+  background: #fef3c7;
+}
+
+.warning-item.warning-LOW {
+  border-left-color: #10b981;
+  background: #ecfdf5;
+}
+
+.warning-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.warning-type {
+  font-weight: 600;
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.severity-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.severity-HIGH {
+  background: #fecaca;
+  color: #7f1d1d;
+}
+
+.severity-MEDIUM {
+  background: #fde047;
+  color: #78350f;
+}
+
+.severity-LOW {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.warning-message {
+  margin: 0;
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.warning-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  gap: 10px;
+}
+
+.btn-continue {
+  background: #1769ff;
+  color: white;
+  padding: 8px 14px;
+  font-size: 13px;
+  min-height: auto;
+}
+
+.btn-continue:hover {
+  background: #1456cc;
+}
+
+.btn-continue:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

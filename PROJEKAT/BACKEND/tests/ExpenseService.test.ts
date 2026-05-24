@@ -248,14 +248,14 @@ describe("ExpenseService", () => {
     test("ne treba kreirati trošak ako datum nije validan", async () => {
       await expect(
         service.createExpense({ ...validPayload, datum: "nije-datum" })
-      ).rejects.toThrow("Datum je obavezan i mora biti validan.");
+      ).rejects.toThrow("Datum je obavezan i mora biti u formatu DD.MM.YYYY. ili YYYY-MM-DD.");
       expect(mockExpenseRepository.create).not.toHaveBeenCalled();
     });
 
     test("ne treba kreirati trošak ako datum nije poslan", async () => {
       await expect(
         service.createExpense({ ...validPayload, datum: "" })
-      ).rejects.toThrow("Datum je obavezan i mora biti validan.");
+      ).rejects.toThrow("Datum je obavezan i mora biti u formatu DD.MM.YYYY. ili YYYY-MM-DD.");
       expect(mockExpenseRepository.create).not.toHaveBeenCalled();
     });
 
@@ -272,7 +272,7 @@ describe("ExpenseService", () => {
     test("ne treba kreirati trošak ako dd.mm.yyyy datum nije kalendarski validan", async () => {
       await expect(
         service.createExpense({ ...validPayload, datum: "31.02.2026" })
-      ).rejects.toThrow("Datum je obavezan i mora biti validan.");
+      ).rejects.toThrow("Datum je obavezan i mora biti u formatu DD.MM.YYYY. ili YYYY-MM-DD.");
       expect(mockExpenseRepository.create).not.toHaveBeenCalled();
     });
   });

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, inject, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, inject, OnInit, OnDestroy } from '@angular/core';
 import {
   FormBuilder,
   ReactiveFormsModule,
@@ -10,7 +10,8 @@ import {
   Expense,
   ExpenseReferenceData,
 } from '../../../models/entities';
-import { ExpenseService } from '../../../services/expense.service';
+import { ExpenseService, ValidationResult } from '../../../services/expense.service';
+import { Subject, debounceTime, takeUntil } from 'rxjs';
 
 @Component({
   selector: 'app-expenses',
@@ -19,10 +20,11 @@ import { ExpenseService } from '../../../services/expense.service';
   templateUrl: './expenses.html',
   styleUrl: './expenses.css',
 })
-export class ExpensesComponent implements OnInit {
+export class ExpensesComponent implements OnInit, OnDestroy {
   private fb = inject(FormBuilder);
   private expenseService = inject(ExpenseService);
   private cdr = inject(ChangeDetectorRef);
+  private destroy$ = new Subject<void>();
 
   expenses: Expense[] = [];
 
@@ -36,11 +38,17 @@ export class ExpensesComponent implements OnInit {
 
   isLoading = false;
   isSaving = false;
+  isValidating = false;
   successMessage = '';
   errorMessage = '';
   editingExpenseId: string | null = null;
   showDeleteModal = false;
   expenseToDeleteId: string | null = null;
+
+  // Validation warnings and errors
+  validationWarnings: Array<{ type: string; message: string; severity: 'LOW' | 'MEDIUM' | 'HIGH' }> = [];
+  validationErrors: string[] = [];
+  hasValidationWarnings = false;
 
   expenseForm = this.fb.group({
     naziv: ['', [Validators.required, Validators.maxLength(200)]],
@@ -59,6 +67,78 @@ export class ExpensesComponent implements OnInit {
   ngOnInit(): void {
     this.loadReferenceData();
     this.loadExpenses();
+    this.setupFormValidation();
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Real-time validation setup
+  // ─────────────────────────────────────────────────────────────
+  private setupFormValidation(): void {
+    this.expenseForm.valueChanges
+      .pipe(
+        debounceTime(500),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        this.performRealtimeValidation();
+      });
+  }
+
+  private performRealtimeValidation(): void {
+    // Clear previous warnings if form is invalid
+    if (this.expenseForm.invalid) {
+      this.validationWarnings = [];
+      this.validationErrors = [];
+      this.hasValidationWarnings = false;
+      return;
+    }
+
+    // Skip validation if we're editing and not all required fields are filled
+    const formValue = this.expenseForm.value;
+    if (!formValue.naziv || !formValue.iznos || !formValue.datum || !formValue.kategorijaId || !formValue.odjelId || !formValue.valutaId) {
+      this.validationWarnings = [];
+      this.validationErrors = [];
+      this.hasValidationWarnings = false;
+      return;
+    }
+
+    this.isValidating = true;
+
+    const payload: CreateExpenseRequest = {
+      naziv: formValue.naziv!,
+      iznos: Number(formValue.iznos),
+      datum: this.toIsoDate(formValue.datum!),
+      opis: formValue.opis || null,
+      kategorijaId: formValue.kategorijaId!,
+      odjelId: formValue.odjelId!,
+      valutaId: formValue.valutaId!,
+      projekatId: formValue.projekatId || null,
+      dobavljacId: formValue.dobavljacId || null,
+    };
+
+    this.expenseService.validateExpenseBeforeCreation(payload).subscribe({
+      next: (result: ValidationResult) => {
+        this.validationWarnings = result.warnings || [];
+        this.validationErrors = result.validationErrors || [];
+        this.hasValidationWarnings = this.validationWarnings.length > 0;
+        this.isValidating = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error('Greška pri validaciji troška:', error);
+        // Don't show errors for validation, just clear warnings
+        this.validationWarnings = [];
+        this.validationErrors = [];
+        this.hasValidationWarnings = false;
+        this.isValidating = false;
+        this.cdr.detectChanges();
+      },
+    });
   }
 
   loadExpenses(): void {
@@ -98,6 +178,9 @@ export class ExpensesComponent implements OnInit {
   saveExpense(): void {
     this.successMessage = '';
     this.errorMessage = '';
+    this.validationWarnings = [];
+    this.validationErrors = [];
+    this.hasValidationWarnings = false;
 
     if (this.expenseForm.invalid) {
       this.expenseForm.markAllAsTouched();
@@ -219,6 +302,9 @@ export class ExpensesComponent implements OnInit {
     this.expenseForm.reset();
     this.successMessage = '';
     this.errorMessage = '';
+    this.validationWarnings = [];
+    this.validationErrors = [];
+    this.hasValidationWarnings = false;
   }
 
   isFieldInvalid(fieldName: string): boolean {

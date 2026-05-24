@@ -33,10 +33,10 @@ class AnomalyService:
         if len(duplicate_candidates) > 0:
             findings.append(
                 {
-                    "type": "POSSIBLE_DUPLICATE",
-                    "severity": "HIGH",
+                    "type": "POTENCIJALNI_DUPLIKAT",
+                    "severity": "MEDIUM",
                     "message": "Pronadjen je moguci dupli trosak sa istim nazivom, iznosom i datumom.",
-                    "evidence": {"duplicateCount": len(duplicate_candidates)},
+                    "evidence": {"duplicateKind": "EXACT", "duplicateCount": len(duplicate_candidates)},
                 }
             )
 
@@ -61,9 +61,12 @@ class AnomalyService:
                     }
                 )
 
-        status = "ANOMALIJA" if findings else "VALIDAN"
-        severity = self._resolve_severity(findings)
-        risk_score = self._resolve_risk_score(findings)
+        anomaly_findings = [
+            finding for finding in findings if self._is_anomaly_finding(finding)
+        ]
+        status = "ANOMALIJA" if anomaly_findings else "VALIDAN"
+        severity = self._resolve_severity(anomaly_findings, findings)
+        risk_score = self._resolve_risk_score(anomaly_findings, findings)
         explanation = (
             " ".join(finding["message"] for finding in findings)
             if findings
@@ -83,19 +86,28 @@ class AnomalyService:
             ),
         }
 
-    def _resolve_severity(self, findings: list[dict[str, Any]]) -> str:
-        if any(finding.get("severity") == "HIGH" for finding in findings):
+    def _resolve_severity(
+        self, anomaly_findings: list[dict[str, Any]], findings: list[dict[str, Any]]
+    ) -> str:
+        if any(finding.get("severity") == "HIGH" for finding in anomaly_findings):
             return "HIGH"
         if findings:
             return "MEDIUM"
         return "LOW"
 
-    def _resolve_risk_score(self, findings: list[dict[str, Any]]) -> float:
+    def _resolve_risk_score(
+        self, anomaly_findings: list[dict[str, Any]], findings: list[dict[str, Any]]
+    ) -> float:
         if not findings:
             return 0.12
-        if any(finding.get("severity") == "HIGH" for finding in findings):
+        if any(finding.get("severity") == "HIGH" for finding in anomaly_findings):
             return 0.9
-        return 0.55
+        if anomaly_findings:
+            return 0.55
+        return 0.35
+
+    def _is_anomaly_finding(self, finding: dict[str, Any]) -> bool:
+        return finding.get("type") != "POTENCIJALNI_DUPLIKAT"
 
     def _to_float(self, value: Any) -> float:
         try:

@@ -111,4 +111,38 @@ describe("ExpenseService AI anomaly notifications", () => {
     expect(mockNotificationService.createAnomalyNotification).not.toHaveBeenCalled();
     expect(result.statusValidacije).toBe("VALIDAN");
   });
+
+  test("treba oznaciti trosak kao potencijalni duplikat bez anomaly notifikacije", async () => {
+    const analysis = {
+      status: "VALIDAN",
+      severity: "MEDIUM",
+      riskScore: 0.35,
+      explanation: "Pronadjen je moguci dupli trosak.",
+      recommendedAction: "Provjeriti prije dalje obrade.",
+      findings: [
+        {
+          type: "POTENCIJALNI_DUPLIKAT",
+          severity: "MEDIUM",
+          message: "Pronadjen je moguci dupli trosak.",
+        },
+      ],
+    };
+    const updatedExpense = { ...createdExpense, statusValidacije: "POTENCIJALNI_DUPLIKAT" };
+
+    mockExpenseRepository.create.mockResolvedValue(createdExpense);
+    mockExpenseRepository.getAiAnalysisContext.mockResolvedValue({ duplicateCandidates: [] });
+    mockAIAnalysisService.analyzeExpense.mockResolvedValue(analysis);
+    mockExpenseRepository.updateValidationStatus.mockResolvedValue(updatedExpense);
+
+    const result = await service.createExpense(payload);
+
+    expect(mockExpenseRepository.updateValidationStatus).toHaveBeenCalledWith(
+      "trosak-1",
+      "POTENCIJALNI_DUPLIKAT"
+    );
+    expect(mockExpenseRepository.createAnomaly).not.toHaveBeenCalled();
+    expect(mockNotificationService.createAnomalyNotification).not.toHaveBeenCalled();
+    expect(result.statusValidacije).toBe("POTENCIJALNI_DUPLIKAT");
+    expect(result.aiAnaliza).toEqual(analysis);
+  });
 });

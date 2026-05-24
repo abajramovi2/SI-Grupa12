@@ -2,6 +2,7 @@ export {};
 
 const mockExpenseService = {
   getReferenceData: jest.fn(),
+  validateExpenseBeforeCreation: jest.fn(),
   createExpense: jest.fn(),
 };
 
@@ -35,6 +36,11 @@ describe("IngestionService", () => {
     jest.clearAllMocks();
     service = new IngestionService();
     mockExpenseService.getReferenceData.mockResolvedValue(referenceData);
+    mockExpenseService.validateExpenseBeforeCreation.mockResolvedValue({
+      isValid: true,
+      validationErrors: [],
+      warnings: [],
+    });
   });
 
   test("treba parsirati CSV, mapirati sifarnike i vratiti validan preview", async () => {
@@ -94,6 +100,67 @@ describe("IngestionService", () => {
     expect(result.rows[0].isValid).toBe(true);
     expect(result.rows[0].expense.iznos).toBe(1200.5);
     expect(result.rows[0].expense.datum).toBe("2026-05-01");
+  });
+
+  test("treba dodati AI upozorenja u preview za anomalije u importovanom fajlu", async () => {
+    mockExpenseService.validateExpenseBeforeCreation.mockResolvedValue({
+      isValid: true,
+      validationErrors: [],
+      warnings: [
+        {
+          type: "AMOUNT_OUTLIER_THRESHOLD",
+          severity: "HIGH",
+          message: "Iznos je znatno veći od prosjeka.",
+        },
+      ],
+    });
+
+    const csv = ["naziv,iznos,datum,kategorija,odjel,valuta", "Server,50000,2026-05-02,Oprema,Finansije,BAM"].join("\n");
+
+    const result = await service.previewImport({
+      originalName: "anomalije.csv",
+      mimetype: "text/csv",
+      buffer: Buffer.from(csv),
+    });
+
+    expect(result.validRows).toBe(1);
+    expect(result.rows[0].warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "ai",
+          type: "AMOUNT_OUTLIER_THRESHOLD",
+          severity: "HIGH",
+        }),
+      ])
+    );
+  });
+
+  test("treba oznaciti red kao nevalidan ako ExpenseService validacija odbije importovani red", async () => {
+    mockExpenseService.validateExpenseBeforeCreation.mockResolvedValue({
+      isValid: false,
+      validationErrors: ["Datum troška ne može biti u budućnosti."],
+      warnings: [],
+    });
+
+    const csv = ["naziv,iznos,datum,kategorija,odjel,valuta", "Server,500,2026-05-02,Oprema,Finansije,BAM"].join("\n");
+
+    const result = await service.previewImport({
+      originalName: "nevalidan-red.csv",
+      mimetype: "text/csv",
+      buffer: Buffer.from(csv),
+    });
+
+    expect(result.validRows).toBe(0);
+    expect(result.invalidRows).toBe(1);
+    expect(result.rows[0].isValid).toBe(false);
+    expect(result.rows[0].errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "expense",
+          message: "Datum troška ne može biti u budućnosti.",
+        }),
+      ])
+    );
   });
 
   test("treba potvrditi uvoz i upisati historiju", async () => {

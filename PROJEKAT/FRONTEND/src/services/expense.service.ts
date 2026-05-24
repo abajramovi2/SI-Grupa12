@@ -8,6 +8,12 @@ import {
 } from '../models/entities';
 import { environment } from '../environments/environment';
 
+export interface ValidationResult {
+  isValid: boolean;
+  validationErrors: string[];
+  warnings: Array<{ type: string; message: string; severity: 'LOW' | 'MEDIUM' | 'HIGH' }>;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -46,5 +52,12 @@ export class ExpenseService {
 
   getReferenceData(): Observable<ExpenseReferenceData> {
     return this.http.get<ExpenseReferenceData>(`${this.apiUrl}/reference-data`, this.getAuthOptions());
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Real-time validation and anomaly detection
+  // ─────────────────────────────────────────────────────────────
+  validateExpenseBeforeCreation(payload: CreateExpenseRequest): Observable<ValidationResult> {
+    return this.http.post<ValidationResult>(`${this.apiUrl}/validate`, payload, this.getAuthOptions());
   }
 }

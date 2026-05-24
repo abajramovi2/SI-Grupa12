@@ -28,6 +28,21 @@ function registerExpenseEndpoints(app: any, authService: IAuthService, _logger?:
     }
   });
 
+  // ─────────────────────────────────────────────────────────────
+  // Real-time validation endpoint for anomaly detection
+  // ─────────────────────────────────────────────────────────────
+  app.post("/api/troskovi/validate", authService.requireAuthentication, authService.requireRole("admin", "administrativni_radnik", "administrativni_zaposlenik"), async (req: any, res: any) => {
+    try {
+      const validationResult = await expenseService.validateExpenseBeforeCreation(req.body);
+      return res.status(200).json(validationResult);
+    } catch (error: any) {
+      console.error("Greška pri validaciji troška:", error);
+      return res.status(400).json({
+        message: error.message || "Greška pri validaciji troška.",
+      });
+    }
+  });
+
   app.post("/api/troskovi", authService.requireAuthentication, authService.requireRole("admin", "administrativni_radnik", "administrativni_zaposlenik"), async (req: any, res: any) => {
     try {
       const createdExpense = await expenseService.createExpense(req.body, req.user);

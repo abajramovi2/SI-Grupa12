@@ -214,7 +214,7 @@ CREATE TABLE troskovi (
         CHECK (iznos > 0),
 
     CONSTRAINT chk_status_validacije
-        CHECK (status_validacije IN ('NA_CEKANJU', 'VALIDAN', 'ANOMALIJA', 'ODBIJEN', 'ZAKLJUCAN'))
+        CHECK (status_validacije IN ('NA_CEKANJU', 'VALIDAN', 'POTENCIJALNI_DUPLIKAT', 'ANOMALIJA', 'ODBIJEN', 'ZAKLJUCAN'))
 );
 
 -- =========================

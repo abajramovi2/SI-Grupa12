@@ -56,6 +56,69 @@ export class ExpenseService implements IExpenseService {
     return createdExpense;
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // Pre-validation method for real-time feedback
+  // ─────────────────────────────────────────────────────────────
+  async validateExpenseBeforeCreation(payload: CreateExpenseRequest): Promise<{
+    isValid: boolean;
+    validationErrors: string[];
+    warnings: Array<{ type: string; message: string; severity: "LOW" | "MEDIUM" | "HIGH" }>;
+  }> {
+    const validationErrors: string[] = [];
+
+    // Run basic validation
+    try {
+      this.validateCreateExpense(payload);
+    } catch (error: any) {
+      validationErrors.push(error.message);
+    }
+
+    if (validationErrors.length > 0) {
+      return {
+        isValid: false,
+        validationErrors,
+        warnings: [],
+      };
+    }
+
+    // Get AI context and perform anomaly detection
+    const warnings: Array<{ type: string; message: string; severity: "LOW" | "MEDIUM" | "HIGH" }> = [];
+
+    try {
+      // Create a temporary expense object for analysis
+      const tempExpense = {
+        id: "temp",
+        naziv: payload.naziv,
+        iznos: Number(payload.iznos),
+        datum: this.normalizeDate(payload.datum),
+        kategorijaId: payload.kategorijaId,
+        odjelId: payload.odjelId,
+      };
+
+      const context = await this.expenseRepository.getAiAnalysisContext(tempExpense);
+      const analysis = await this.aiAnalysisService.analyzeExpense(tempExpense, context);
+
+      if (analysis?.findings && Array.isArray(analysis.findings)) {
+        for (const finding of analysis.findings) {
+          warnings.push({
+            type: finding.type,
+            message: finding.message,
+            severity: finding.severity,
+          });
+        }
+      }
+    } catch (error) {
+      // Don't let AI analysis failures block validation
+      console.error("Error during pre-validation AI analysis:", error);
+    }
+
+    return {
+      isValid: validationErrors.length === 0,
+      validationErrors,
+      warnings,
+    };
+  }
+
   async updateExpense(id: string, payload: CreateExpenseRequest): Promise<any> {
     const normalizedPayload = this.validateCreateExpense(payload);
 
@@ -93,14 +156,21 @@ export class ExpenseService implements IExpenseService {
       throw new Error("Podaci za trošak nisu poslani.");
     }
 
+    // Validate naziv (name)
     if (!payload.naziv || payload.naziv.trim() === "") {
       throw new Error("Naziv troška je obavezan.");
     }
 
-    if (payload.naziv.length > 200) {
+    const trimmedNaziv = payload.naziv.trim();
+    if (trimmedNaziv.length > 200) {
       throw new Error("Naziv troška ne smije imati više od 200 karaktera.");
     }
 
+    if (trimmedNaziv.length < 3) {
+      throw new Error("Naziv troška mora imati najmanje 3 karaktera.");
+    }
+
+    // Validate iznos (amount)
     const iznos = Number(payload.iznos);
 
     if (!Number.isFinite(iznos)) {
@@ -111,25 +181,59 @@ export class ExpenseService implements IExpenseService {
       throw new Error("Iznos mora biti veći od 0.");
     }
 
-    const datum = this.normalizeDate(payload.datum);
-    if (!datum) {
-      throw new Error("Datum je obavezan i mora biti validan.");
+    // Warn about unrealistic amounts in validateCreateExpense
+    if (iznos < 0.01) {
+      throw new Error("Iznos je premali. Minimalni iznos je 0.01.");
     }
 
+    if (iznos > 10000000) {
+      throw new Error("Iznos je prevelik. Maksimalni iznos je 10,000,000.");
+    }
+
+    // Validate datum (date)
+    const datum = this.normalizeDate(payload.datum);
+    if (!datum) {
+      throw new Error("Datum je obavezan i mora biti u formatu DD.MM.YYYY. ili YYYY-MM-DD.");
+    }
+
+    // Validate that date is not in the future
+    const expenseDate = new Date(datum);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (expenseDate > today) {
+      throw new Error("Datum troška ne može biti u budućnosti.");
+    }
+
+    // Validate that date is not too old (more than 5 years in the past)
+    const fiveYearsAgo = new Date();
+    fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+    if (expenseDate < fiveYearsAgo) {
+      throw new Error("Datum troška ne može biti stariji od 5 godina.");
+    }
+
+    // Validate kategorijaId (category)
     if (!payload.kategorijaId) {
       throw new Error("Kategorija je obavezna.");
     }
 
+    // Validate odjelId (department)
     if (!payload.odjelId) {
       throw new Error("Odjel je obavezan.");
     }
 
+    // Validate valutaId (currency)
     if (!payload.valutaId) {
       throw new Error("Valuta je obavezna.");
     }
 
+    // Validate opis (description) if provided
+    if (payload.opis && payload.opis.trim().length > 1000) {
+      throw new Error("Opis troška ne smije imati više od 1000 karaktera.");
+    }
+
     return {
       ...payload,
+      naziv: trimmedNaziv,
       datum,
     };
   }
@@ -140,7 +244,15 @@ export class ExpenseService implements IExpenseService {
       const analysis = await this.aiAnalysisService.analyzeExpense(createdExpense, context);
 
       if (analysis?.status !== "ANOMALIJA") {
-        return await this.expenseRepository.updateValidationStatus(createdExpense.id, "VALIDAN");
+        const status = this.hasPotentialDuplicateFinding(analysis)
+          ? "POTENCIJALNI_DUPLIKAT"
+          : "VALIDAN";
+        const updatedExpense = await this.expenseRepository.updateValidationStatus(createdExpense.id, status);
+
+        return {
+          ...updatedExpense,
+          aiAnaliza: analysis,
+        };
       }
 
       const updatedExpense = await this.expenseRepository.updateValidationStatus(createdExpense.id, "ANOMALIJA");
@@ -154,6 +266,11 @@ export class ExpenseService implements IExpenseService {
     } catch (error) {
       return createdExpense;
     }
+  }
+
+  private hasPotentialDuplicateFinding(analysis: any): boolean {
+    return Array.isArray(analysis?.findings)
+      && analysis.findings.some((finding: any) => finding?.type === "POTENCIJALNI_DUPLIKAT");
   }
 
   private normalizeDate(value: string): string | null {
