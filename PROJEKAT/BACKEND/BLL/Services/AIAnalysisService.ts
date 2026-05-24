@@ -49,7 +49,7 @@ export type DatabaseAnalysisResult = {
   mjesecniTrendovi: MonthlyTrendPoint[];
   predvidjanjeBudzeta: BudzetPrediction[];
   preporuke: string[];
-  sažetak: string;
+  sazetak: string;
 };
 
 export class AIAnalysisService {
@@ -339,7 +339,7 @@ export class AIAnalysisService {
       }
     }
 
-    const sažetak = `Analiza obuhvata ${expenses.length} troškova u ukupnom iznosu od ${ukupniIznos.toFixed(2)} BAM raspoređenih kroz ${sortedMonths.length} mjeseci. Trend kretanja: ${trenKretanja === "RAST" ? "rast" : trenKretanja === "PAD" ? "pad" : "stabilan"}.`;
+    const sazetak = `Analiza obuhvata ${expenses.length} troškova u ukupnom iznosu od ${ukupniIznos.toFixed(2)} BAM raspoređenih kroz ${sortedMonths.length} mjeseci. Trend kretanja: ${trenKretanja === "RAST" ? "rast" : trenKretanja === "PAD" ? "pad" : "stabilan"}.`;
 
     return {
       analizaId: null,
