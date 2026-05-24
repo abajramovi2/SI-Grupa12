@@ -356,7 +356,7 @@ export class AIAnalysisService {
       mjesecniTrendovi,
       predvidjanjeBudzeta,
       preporuke,
-      sažetak,
+      sazetak,
     };
   }
 

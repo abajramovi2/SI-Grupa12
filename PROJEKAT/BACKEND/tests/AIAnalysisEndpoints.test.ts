@@ -51,7 +51,7 @@ const sampleAnaliza = {
     { sljedeciMjesec: "April 2026", predvideniIznos: 3500, donjaBoundary: 3000, gornjaBoundary: 4000, pouzdanostProcjene: "SREDNJA" },
   ],
   preporuke: ["Troškovi rastu po stopi od 12.5%."],
-  sažetak: "Analiza obuhvata 10 troškova.",
+  sazetak: "Analiza obuhvata 10 troškova.",
 };
 
 const sampleReport = {
@@ -149,7 +149,7 @@ describe("POST /api/ai/analize/baza – AIAnalysisEndpoints", () => {
     expect(response.body).toHaveProperty("mjesecniTrendovi");
     expect(response.body).toHaveProperty("predvidjanjeBudzeta");
     expect(response.body).toHaveProperty("preporuke");
-    expect(response.body).toHaveProperty("sažetak");
+    expect(response.body).toHaveProperty("sazetak");
     expect(response.body).toHaveProperty("generisanoU");
   });
 

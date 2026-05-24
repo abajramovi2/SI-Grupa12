@@ -31,7 +31,7 @@ export interface DatabaseAnalysisResult {
   mjesecniTrendovi: MonthlyTrendPoint[];
   predvidjanjeBudzeta: BudzetPrediction[];
   preporuke: string[];
-  sažetak: string;
+  sazetak: string;
 }
 
 @Injectable({ providedIn: 'root' })

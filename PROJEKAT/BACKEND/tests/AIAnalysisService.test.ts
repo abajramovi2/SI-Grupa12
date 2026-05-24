@@ -144,7 +144,7 @@ describe("AIAnalysisService – fallbackDatabaseAnalysis", () => {
     expect(result).toHaveProperty("mjesecniTrendovi");
     expect(result).toHaveProperty("predvidjanjeBudzeta");
     expect(result).toHaveProperty("preporuke");
-    expect(result).toHaveProperty("sažetak");
+    expect(result).toHaveProperty("sazetak");
   });
 
   test("vraća STABILAN trend i 0 troškova za praznu bazu", () => {
@@ -290,8 +290,8 @@ describe("AIAnalysisService – fallbackDatabaseAnalysis", () => {
 
     const result = svc.fallbackDatabaseAnalysis({ expenses }, []);
 
-    expect(result.sažetak).toContain("2");
-    expect(result.sažetak).toContain("3000.00");
+    expect(result.sazetak).toContain("2");
+    expect(result.sazetak).toContain("3000.00");
   });
 
   test("ne baca grešku za troškove bez datuma", () => {
@@ -340,7 +340,7 @@ describe("AIAnalysisService – analyzeFullDatabase (fetch)", () => {
       mjesecniTrendovi: [],
       predvidjanjeBudzeta: [],
       preporuke: [],
-      sažetak: "AI analiza",
+      sazetak: "AI analiza",
     };
 
     fetchSpy.mockResolvedValue({
