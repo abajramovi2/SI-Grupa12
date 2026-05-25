@@ -180,13 +180,10 @@ export class ExpensesComponent implements OnInit, OnDestroy {
   saveExpense(): void {
     this.successMessage = '';
     this.errorMessage = '';
-<<<<<<< HEAD
     this.categorySuggestionMessage = '';
-=======
     this.validationWarnings = [];
     this.validationErrors = [];
     this.hasValidationWarnings = false;
->>>>>>> feature/prikaz-notifikacije
 
     if (this.expenseForm.invalid) {
       this.expenseForm.markAllAsTouched();
@@ -359,13 +356,10 @@ export class ExpensesComponent implements OnInit, OnDestroy {
     this.expenseForm.reset();
     this.successMessage = '';
     this.errorMessage = '';
-<<<<<<< HEAD
     this.categorySuggestionMessage = '';
-=======
     this.validationWarnings = [];
     this.validationErrors = [];
     this.hasValidationWarnings = false;
->>>>>>> feature/prikaz-notifikacije
   }
 
   isFieldInvalid(fieldName: string): boolean {
