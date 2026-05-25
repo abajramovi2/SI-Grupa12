@@ -82,4 +82,40 @@ describe("ReportEndpoints", () => {
       "finansijski_direktor"
     );
   });
+
+  test("GET /api/izvjestaji/troskovi vraca servisnu gresku", async () => {
+    mockReportService.getExpenseReport.mockRejectedValue(new Error("Datum od nije validan."));
+
+    const response = await request(app).get("/api/izvjestaji/troskovi");
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: "Datum od nije validan." });
+  });
+
+  test("GET /api/izvjestaji/troskovi vraca genericku gresku bez message", async () => {
+    mockReportService.getExpenseReport.mockRejectedValue({});
+
+    const response = await request(app).get("/api/izvjestaji/troskovi");
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: "Greska pri generisanju izvjestaja." });
+  });
+
+  test("GET /api/izvjestaji/troskovi/export vraca servisnu gresku", async () => {
+    mockReportService.exportExpenseReport.mockRejectedValue(new Error("Format izvjestaja mora biti xlsx, csv ili pdf."));
+
+    const response = await request(app).get("/api/izvjestaji/troskovi/export").query({ format: "txt" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: "Format izvjestaja mora biti xlsx, csv ili pdf." });
+  });
+
+  test("GET /api/izvjestaji/troskovi/export vraca genericku gresku bez message", async () => {
+    mockReportService.exportExpenseReport.mockRejectedValue({});
+
+    const response = await request(app).get("/api/izvjestaji/troskovi/export").query({ format: "csv" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: "Greska pri exportu izvjestaja." });
+  });
 });

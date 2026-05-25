@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
-import { forkJoin, of } from 'rxjs';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { forkJoin, of, Subscription, timer } from 'rxjs';
 import { catchError, finalize } from 'rxjs/operators';
 import { AppNotification, NotificationPriority } from '../../../models/entities';
+import { ExpenseService } from '../../../services/expense.service';
 import { NotificationService } from '../../../services/notification.service';
 
 type NotificationFilter = 'ALL' | NotificationPriority;
@@ -14,15 +15,18 @@ type NotificationFilter = 'ALL' | NotificationPriority;
   templateUrl: './notifications.html',
   styleUrl: './notifications.css',
 })
-export class NotificationsComponent implements OnInit {
+export class NotificationsComponent implements OnInit, OnDestroy {
   private readonly notificationService = inject(NotificationService);
+  private readonly expenseService = inject(ExpenseService);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly refreshSubscription = new Subscription();
 
   public notifications: AppNotification[] = [];
   public selectedNotification: AppNotification | null = null;
   public activeFilter: NotificationFilter = 'ALL';
   public isLoading = false;
   public isUpdating = false;
+  public actionMessage = '';
   public errorMessage = '';
 
   public readonly filters: Array<{ value: NotificationFilter; label: string }> = [
@@ -34,6 +38,11 @@ export class NotificationsComponent implements OnInit {
 
   public ngOnInit(): void {
     this.loadNotifications();
+    this.refreshSubscription.add(timer(3000, 3000).subscribe(() => this.loadNotifications(true)));
+  }
+
+  public ngOnDestroy(): void {
+    this.refreshSubscription.unsubscribe();
   }
 
   public get unreadCount(): number {
@@ -64,22 +73,36 @@ export class NotificationsComponent implements OnInit {
     return this.extractRecommendation(this.selectedNotification.poruka);
   }
 
-  public loadNotifications(): void {
-    this.isLoading = true;
+  public loadNotifications(silent = false): void {
+    if (!silent) {
+      this.isLoading = true;
+    }
+
     this.errorMessage = '';
 
     this.notificationService.getNotifications()
       .pipe(finalize(() => {
-        this.isLoading = false;
+        if (!silent) {
+          this.isLoading = false;
+        }
+
         this.cdr.detectChanges();
       }))
       .subscribe({
         next: (notifications) => {
+          const selectedId = this.selectedNotification?.id;
           this.notifications = notifications;
-          this.selectedNotification = notifications[0] || null;
+          this.selectedNotification =
+            notifications.find((notification) => notification.id === selectedId) ||
+            notifications[0] ||
+            null;
         },
         error: (error) => {
           console.error(error);
+          if (silent) {
+            return;
+          }
+
           this.errorMessage = this.getErrorMessage(error);
           this.notifications = [];
           this.selectedNotification = null;
@@ -142,6 +165,66 @@ export class NotificationsComponent implements OnInit {
       });
   }
 
+  public get selectedDuplicateNeedsDecision(): boolean {
+    if (!this.selectedNotification?.povezaniTrosakId || this.selectedNotification?.akcijaStatus) {
+      return false;
+    }
+
+    return this.selectedNotification.tipNotifikacije === 'DUPLI_TROSAK' ||
+      this.selectedNotification.poruka.toLowerCase().includes('dupli') ||
+      this.selectedNotification.poruka.toLowerCase().includes('duplikat');
+  }
+
+  public approveSelectedDuplicate(): void {
+    const expenseId = this.selectedNotification?.povezaniTrosakId;
+    if (!expenseId || this.isUpdating) {
+      return;
+    }
+
+    this.isUpdating = true;
+    this.actionMessage = '';
+    this.expenseService.savePotentialDuplicate(expenseId)
+      .pipe(finalize(() => {
+        this.isUpdating = false;
+        this.cdr.detectChanges();
+      }))
+      .subscribe({
+        next: () => {
+          this.actionMessage = 'Trosak je odobren i prikazat ce se u listi troskova.';
+          this.loadNotifications();
+        },
+        error: (error) => {
+          console.error(error);
+          this.errorMessage = this.getErrorMessage(error);
+        },
+      });
+  }
+
+  public deleteSelectedDuplicate(): void {
+    const expenseId = this.selectedNotification?.povezaniTrosakId;
+    if (!expenseId || this.isUpdating) {
+      return;
+    }
+
+    this.isUpdating = true;
+    this.actionMessage = '';
+    this.expenseService.deletePotentialDuplicate(expenseId)
+      .pipe(finalize(() => {
+        this.isUpdating = false;
+        this.cdr.detectChanges();
+      }))
+      .subscribe({
+        next: () => {
+          this.actionMessage = 'Trosak je obrisan, nece se prikazati u listi troskova i nece se racunati u budzet.';
+          this.loadNotifications();
+        },
+        error: (error) => {
+          console.error(error);
+          this.errorMessage = this.getErrorMessage(error);
+        },
+      });
+  }
+
   public priorityLabel(priority: NotificationPriority): string {
     const labels: Record<NotificationPriority, string> = {
       HIGH: 'Kritično',
@@ -198,13 +281,13 @@ export class NotificationsComponent implements OnInit {
       return '-';
     }
 
-    return date.toLocaleString('bs-BA', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+
+    return `${day}.${month}.${year} ${hours}:${minutes}`;
   }
 
   public getSummary(notification: AppNotification): string {

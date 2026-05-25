@@ -84,4 +84,122 @@ describe("NotificationRepository internals and DB calls", () => {
     const calledArgs = AppDB.db.query.mock.calls[0][1];
     expect(calledArgs[2]).toBe("someone@example.com");
   });
+
+  test("createForUsers kreira notifikacije za vise korisnika i mapira procitano", async () => {
+    AppDB.db.query.mockResolvedValueOnce({
+      rows: [
+        { id: "n1", naslov: "A", procitano: 0 },
+        { id: "n2", naslov: "A", procitano: 1 },
+      ],
+    });
+
+    const result = await repo.createForUsers(["u1", "u2"], {
+      naslov: "A",
+      poruka: "P",
+      prioritet: "HIGH",
+      tipNotifikacije: "DUPLI_TROSAK",
+      povezaniTrosakId: "t1",
+      akcijaStatus: "NOVO",
+    });
+
+    expect(result.map((row: any) => row.procitano)).toEqual([false, true]);
+    expect(AppDB.db.query.mock.calls[0][0]).toContain("INSERT INTO notifikacije");
+    expect(AppDB.db.query.mock.calls[0][1]).toEqual([
+      "A",
+      "P",
+      "HIGH",
+      "u1",
+      "DUPLI_TROSAK",
+      "t1",
+      "NOVO",
+      "A",
+      "P",
+      "HIGH",
+      "u2",
+      "DUPLI_TROSAK",
+      "t1",
+      "NOVO",
+    ]);
+  });
+
+  test("createForUsers koristi default tip i null akcijske podatke", async () => {
+    AppDB.db.query.mockResolvedValueOnce({ rows: [{ id: "n1", procitano: false }] });
+
+    await repo.createForUsers(["u1"], { naslov: "A", poruka: "P", prioritet: "LOW" });
+
+    expect(AppDB.db.query.mock.calls[0][1]).toEqual(["A", "P", "LOW", "u1", "AI_ANOMALIJA", null, null]);
+  });
+
+  test("getByUserId vraca notifikacije korisnika", async () => {
+    AppDB.db.query.mockResolvedValueOnce({
+      rows: [
+        { id: "n1", naslov: "A", procitano: false },
+        { id: "n2", naslov: "B", procitano: true },
+      ],
+    });
+
+    const result = await repo.getByUserId("u1");
+
+    expect(result).toEqual([
+      { id: "n1", naslov: "A", procitano: false },
+      { id: "n2", naslov: "B", procitano: true },
+    ]);
+    expect(AppDB.db.query.mock.calls[0][1]).toEqual(["u1"]);
+  });
+
+  test("getUnreadCountByUserId vraca broj neprocitanih i fallback nulu", async () => {
+    AppDB.db.query.mockResolvedValueOnce({ rows: [{ count: "4" }] });
+    await expect(repo.getUnreadCountByUserId("u1")).resolves.toBe(4);
+
+    AppDB.db.query.mockResolvedValueOnce({ rows: [] });
+    await expect(repo.getUnreadCountByUserId("u1")).resolves.toBe(0);
+  });
+
+  test("markAsRead vraca azuriranu notifikaciju ili undefined", async () => {
+    AppDB.db.query.mockResolvedValueOnce({ rows: [{ id: "n1", procitano: 1 }] });
+    await expect(repo.markAsRead("n1", "u1")).resolves.toEqual({ id: "n1", procitano: true });
+    expect(AppDB.db.query.mock.calls[0][1]).toEqual(["n1", "u1"]);
+
+    AppDB.db.query.mockResolvedValueOnce({ rows: [] });
+    await expect(repo.markAsRead("missing", "u1")).resolves.toBeUndefined();
+  });
+
+  test("markActionHandledByExpenseId oznacava povezane notifikacije", async () => {
+    AppDB.db.query.mockResolvedValueOnce({
+      rows: [
+        { id: "n1", procitano: 1, akcijaStatus: "SACUVAN" },
+        { id: "n2", procitano: 1, akcijaStatus: "SACUVAN" },
+      ],
+    });
+
+    const result = await repo.markActionHandledByExpenseId("t1", "SACUVAN");
+
+    expect(result).toEqual([
+      { id: "n1", procitano: true, akcijaStatus: "SACUVAN" },
+      { id: "n2", procitano: true, akcijaStatus: "SACUVAN" },
+    ]);
+    expect(AppDB.db.query.mock.calls[0][1]).toEqual(["t1", "SACUVAN"]);
+  });
+
+  test("getUserIdFromAuth koristi fallback email, given_name i null id fallback", async () => {
+    AppDB.db.query.mockResolvedValueOnce({ rows: [{ id: "db-user-3" }] });
+    const firstId = await repo.getUserIdFromAuth({ sub: "sub-123", preferred_username: "korisnik" });
+    expect(firstId).toBe("db-user-3");
+    expect(AppDB.db.query.mock.calls[0][1][0]).toBe("korisnik");
+    expect(AppDB.db.query.mock.calls[0][1][2]).toBe("korisnik@keycloak.local");
+
+    AppDB.db.query.mockResolvedValueOnce({ rows: [{ id: "db-user-4" }] });
+    await repo.getUserIdFromAuth({
+      email: "ime@example.com",
+      given_name: "Ime",
+      family_name: "Prezime",
+      roles: ["finansijski_direktor"],
+    });
+    expect(AppDB.db.query.mock.calls[1][1][0]).toBe("Ime");
+    expect(AppDB.db.query.mock.calls[1][1][1]).toBe("Prezime");
+    expect(AppDB.db.query.mock.calls[1][1][3]).toBe("FINANSIJSKI_DIREKTOR");
+
+    AppDB.db.query.mockResolvedValueOnce({ rows: [] });
+    await expect(repo.getUserIdFromAuth({ email: "x@example.com" })).resolves.toBeNull();
+  });
 });

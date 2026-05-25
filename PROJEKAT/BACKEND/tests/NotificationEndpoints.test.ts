@@ -65,4 +65,58 @@ describe("NotificationEndpoints", () => {
       expect.objectContaining({ sub: "test-user" })
     );
   });
+
+  test("GET /api/notifikacije vraca servisnu gresku", async () => {
+    mockNotificationService.getNotificationsForUser.mockRejectedValue(new Error("Sesija nije validna."));
+
+    const response = await request(app).get("/api/notifikacije");
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ message: "Sesija nije validna." });
+  });
+
+  test("GET /api/notifikacije vraca genericku gresku bez message", async () => {
+    mockNotificationService.getNotificationsForUser.mockRejectedValue({});
+
+    const response = await request(app).get("/api/notifikacije");
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ message: "Greska pri dohvatu notifikacija." });
+  });
+
+  test("GET /api/notifikacije/neprocitane/count vraca servisnu gresku", async () => {
+    mockNotificationService.getUnreadCountForUser.mockRejectedValue(new Error("Token error"));
+
+    const response = await request(app).get("/api/notifikacije/neprocitane/count");
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ message: "Token error" });
+  });
+
+  test("GET /api/notifikacije/neprocitane/count vraca genericku gresku bez message", async () => {
+    mockNotificationService.getUnreadCountForUser.mockRejectedValue({});
+
+    const response = await request(app).get("/api/notifikacije/neprocitane/count");
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ message: "Greska pri dohvatu broja neprocitanih notifikacija." });
+  });
+
+  test("PATCH /api/notifikacije/:id/procitano vraca servisnu gresku", async () => {
+    mockNotificationService.markAsRead.mockRejectedValue(new Error("Notifikacija ne postoji."));
+
+    const response = await request(app).patch("/api/notifikacije/notif-1/procitano");
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: "Notifikacija ne postoji." });
+  });
+
+  test("PATCH /api/notifikacije/:id/procitano vraca genericku gresku bez message", async () => {
+    mockNotificationService.markAsRead.mockRejectedValue({});
+
+    const response = await request(app).patch("/api/notifikacije/notif-1/procitano");
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ message: "Greska pri oznacavanju notifikacije kao procitane." });
+  });
 });

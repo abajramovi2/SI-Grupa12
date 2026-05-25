@@ -12,6 +12,8 @@ export interface ImportConfirmRequest {
 export interface ImportRowIssue {
   field?: string;
   message: string;
+  type?: string;
+  severity?: "LOW" | "MEDIUM" | "HIGH";
 }
 
 export interface ImportPreviewRow {
