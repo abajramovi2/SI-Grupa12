@@ -232,6 +232,9 @@ export interface AppNotification {
   poruka: string;
   prioritet: NotificationPriority;
   korisnikId?: string | number;
+  tipNotifikacije?: string;
+  povezaniTrosakId?: string | number | null;
+  akcijaStatus?: string | null;
   procitano: boolean;
   vrijemeKreiranja: string;
 }

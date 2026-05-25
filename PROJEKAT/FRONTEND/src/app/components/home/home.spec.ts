@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { of } from 'rxjs';
 
 import { HomeComponent } from './home';
+import { AuthGuardService } from '../../../middleware/middleware.authguard';
+import { ExpenseService } from '../../../services/expense.service';
 
 describe('HomeComponent', () => {
   let component: HomeComponent;
@@ -8,7 +12,31 @@ describe('HomeComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [HomeComponent],
+      imports: [HomeComponent],
+      providers: [
+        provideRouter([]),
+        {
+          provide: AuthGuardService,
+          useValue: {
+            authState$: of(false),
+            hasAnyRole: () => false,
+          },
+        },
+        {
+          provide: ExpenseService,
+          useValue: {
+            getExpenses: () => of([]),
+            getReferenceData: () =>
+              of({
+                kategorije: [],
+                odjeli: [],
+                valute: [],
+                projekti: [],
+                dobavljaci: [],
+              }),
+          },
+        },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(HomeComponent);

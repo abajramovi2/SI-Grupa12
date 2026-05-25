@@ -16,4 +16,9 @@ export interface IExpenseService {
   createExpense(payload: CreateExpenseRequest, authUser?: unknown): Promise<any>;
   getReferenceData(): Promise<any>;
   suggestCategory(payload: any): Promise<any>;
+  validateExpenseBeforeCreation(payload: CreateExpenseRequest): Promise<{
+    isValid: boolean;
+    validationErrors: string[];
+    warnings: Array<{ type: string; message: string; severity: "LOW" | "MEDIUM" | "HIGH" }>;
+  }>;
 }
