@@ -527,9 +527,10 @@ export class AIAnalysisService {
   }
 
   async analyzeFullDatabase(reportData: any, budgetData: any): Promise<DatabaseAnalysisResult> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
+      timeout = setTimeout(() => controller.abort(), 10000);
 
       const response = await fetch(`${this.aiServiceUrl}/ai/database-analysis`, {
         method: "POST",
@@ -538,8 +539,6 @@ export class AIAnalysisService {
         signal: controller.signal,
       });
 
-      clearTimeout(timeout);
-
       if (!response.ok) {
         throw new Error(`AI servis je vratio status ${response.status}.`);
       }
@@ -547,6 +546,10 @@ export class AIAnalysisService {
       return await response.json() as DatabaseAnalysisResult;
     } catch (_error) {
       return this.fallbackDatabaseAnalysis(reportData, budgetData);
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
     }
   }
 

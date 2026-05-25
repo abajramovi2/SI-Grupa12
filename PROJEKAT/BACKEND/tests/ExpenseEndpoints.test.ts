@@ -12,6 +12,8 @@ const mockExpenseService = {
   updateExpense: jest.fn(),
   deleteExpense: jest.fn(),
   resolvePotentialDuplicate: jest.fn(),
+  suggestCategory: jest.fn(),
+  validateExpenseBeforeCreation: jest.fn(),
 };
 
 jest.mock("../BLL/Services/ExpenseService", () => ({
@@ -358,6 +360,76 @@ describe("ExpenseEndpoints – integracioni testovi", () => {
       expect(response.status).toBe(200);
       expect(response.body.deleted).toBe(true);
       expect(mockExpenseService.resolvePotentialDuplicate).toHaveBeenCalledWith("dup-1", "DELETE");
+    });
+  });
+
+  describe("Dodatne grane endpointa", () => {
+    test("POST /api/troskovi/category-suggestion vraca prijedlog kategorije", async () => {
+      mockExpenseService.suggestCategory.mockResolvedValue({ kategorijaId: "kat-1", confidence: 0.91 });
+
+      const response = await request(app)
+        .post("/api/troskovi/category-suggestion")
+        .send({ naziv: "Laptop", opis: "Racunarska oprema" });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ kategorijaId: "kat-1", confidence: 0.91 });
+    });
+
+    test("POST /api/troskovi/category-suggestion vraca servisnu i genericku gresku", async () => {
+      mockExpenseService.suggestCategory.mockRejectedValueOnce(new Error("Naziv je obavezan."));
+      const serviceError = await request(app).post("/api/troskovi/category-suggestion").send({});
+      expect(serviceError.status).toBe(400);
+      expect(serviceError.body).toEqual({ message: "Naziv je obavezan." });
+
+      mockExpenseService.suggestCategory.mockRejectedValueOnce({});
+      const genericError = await request(app).post("/api/troskovi/category-suggestion").send({});
+      expect(genericError.status).toBe(400);
+      expect(genericError.body).toEqual({ message: "Greska pri AI prijedlogu kategorije." });
+    });
+
+    test("POST /api/troskovi/validate vraca rezultat validacije", async () => {
+      const validation = { isValid: true, validationErrors: [], warnings: [] };
+      mockExpenseService.validateExpenseBeforeCreation.mockResolvedValue(validation);
+
+      const response = await request(app).post("/api/troskovi/validate").send({ naziv: "Gorivo" });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(validation);
+    });
+
+    test("POST /api/troskovi/validate vraca servisnu i genericku gresku", async () => {
+      mockExpenseService.validateExpenseBeforeCreation.mockRejectedValueOnce(new Error("Datum je obavezan."));
+      const serviceError = await request(app).post("/api/troskovi/validate").send({});
+      expect(serviceError.status).toBe(400);
+      expect(serviceError.body).toEqual({ message: "Datum je obavezan." });
+
+      mockExpenseService.validateExpenseBeforeCreation.mockRejectedValueOnce({});
+      const genericError = await request(app).post("/api/troskovi/validate").send({});
+      expect(genericError.status).toBe(400);
+      expect(genericError.body).toEqual({ message: "Greška pri validaciji troška." });
+    });
+
+    test("PUT /api/troskovi/:id koristi id iz body ili query kada param nije dovoljan za branch fallback", async () => {
+      mockExpenseService.updateExpense.mockResolvedValue({ id: "body-id" });
+      const bodyResponse = await request(app).put("/api/troskovi/").send({ id: "body-id" });
+      expect(bodyResponse.status).toBe(404);
+
+      mockExpenseService.updateExpense.mockResolvedValue({ id: "query-id" });
+      const response = await request(app).put("/api/troskovi/query-id").query({ id: "ignored" }).send({});
+      expect(response.status).toBe(200);
+      expect(mockExpenseService.updateExpense).toHaveBeenLastCalledWith("query-id", {});
+    });
+
+    test("duplikat akcije vracaju fallback greske bez message", async () => {
+      mockExpenseService.resolvePotentialDuplicate.mockRejectedValueOnce({});
+      const saveResponse = await request(app).post("/api/troskovi/dup-1/duplikat/sacuvaj");
+      expect(saveResponse.status).toBe(400);
+      expect(saveResponse.body).toEqual({ message: "Greska pri cuvanju duplog troska." });
+
+      mockExpenseService.resolvePotentialDuplicate.mockRejectedValueOnce({});
+      const deleteResponse = await request(app).delete("/api/troskovi/dup-1/duplikat");
+      expect(deleteResponse.status).toBe(400);
+      expect(deleteResponse.body).toEqual({ message: "Greska pri brisanju duplog troska." });
     });
   });
 });

@@ -128,4 +128,56 @@ describe("NotificationService", () => {
     expect(result).toEqual([{ id: "notif-1" }]);
     expect(mockNotificationRepository.markActionHandledByExpenseId).toHaveBeenCalledWith("trosak-1", "SACUVAN");
   });
+
+  test("createAnomalyNotification koristi fallback vrijednosti za nepotpun trosak i analizu", async () => {
+    mockNotificationRepository.getRecipientsForAnomalyNotifications.mockResolvedValue([{ id: "user-1" }]);
+    mockNotificationRepository.createForUsers.mockResolvedValue([{ id: "notif-1" }]);
+
+    await service.createAnomalyNotification({}, {});
+
+    expect(mockNotificationRepository.createForUsers).toHaveBeenCalledWith(
+      ["user-1"],
+      expect.objectContaining({
+        naslov: "AI anomalija: Trosak",
+        prioritet: "MEDIUM",
+        povezaniTrosakId: null,
+        poruka: expect.stringContaining('Trosak "bez naziva" (0.00 BAM)'),
+      })
+    );
+  });
+
+  test("createPotentialDuplicateNotification koristi fallback vrijednosti za nepotpun trosak i analizu", async () => {
+    mockNotificationRepository.getRecipientsForAnomalyNotifications.mockResolvedValue([{ id: "user-1" }]);
+    mockNotificationRepository.createForUsers.mockResolvedValue([{ id: "notif-1" }]);
+
+    await service.createPotentialDuplicateNotification({}, {});
+
+    expect(mockNotificationRepository.createForUsers).toHaveBeenCalledWith(
+      ["user-1"],
+      expect.objectContaining({
+        naslov: "Dupli trosak: Trosak",
+        povezaniTrosakId: null,
+        poruka: expect.stringContaining('Trosak "bez naziva" (0.00 BAM)'),
+      })
+    );
+  });
+
+  test("getUnreadCountForUser vraca broj neprocitanih za korisnika", async () => {
+    mockNotificationRepository.getUserIdFromAuth.mockResolvedValue("user-1");
+    mockNotificationRepository.getUnreadCountByUserId.mockResolvedValue(5);
+
+    await expect(service.getUnreadCountForUser({ sub: "user" })).resolves.toBe(5);
+    expect(mockNotificationRepository.getUnreadCountByUserId).toHaveBeenCalledWith("user-1");
+  });
+
+  test("markAsRead baca gresku kada nema korisnika", async () => {
+    mockNotificationRepository.getUserIdFromAuth.mockResolvedValue(null);
+
+    await expect(service.markAsRead("notif-1", {})).rejects.toThrow("Nije moguce dohvatiti korisnika za notifikacije.");
+  });
+
+  test("markDuplicateActionHandled vraca prazan niz bez expenseId", async () => {
+    await expect(service.markDuplicateActionHandled("", "OBRISAN")).resolves.toEqual([]);
+    expect(mockNotificationRepository.markActionHandledByExpenseId).not.toHaveBeenCalled();
+  });
 });
