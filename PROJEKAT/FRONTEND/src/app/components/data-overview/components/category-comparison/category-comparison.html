@@ -114,20 +114,73 @@
     } @else {
       <div class="category-comparison-bars">
         @for (row of rows; track row.groupName) {
-          <div
+          <button
+            type="button"
             class="category-bar-row"
+            [class.selected-category-row]="isGroupSelected(row.groupName)"
             [class.top-category-row]="isHighestRow(row)"
-            [class.low-category-row]="isLowestRow(row)">
+            [class.low-category-row]="isLowestRow(row)"
+            (click)="selectGroup(row)">
             <div class="category-bar-label">
               <strong>{{ row.groupName }}</strong>
-              <span>{{ row.totalAmountBam | number: '1.2-2' }} KM</span>
+              <span>{{ row.totalAmountBam | number: '1.2-2' }} KM · {{ row.expenseCount }} troškova</span>
             </div>
             <div class="category-bar-track" aria-hidden="true">
               <div class="category-bar-fill" [style.width]="getBarWidth(row)"></div>
             </div>
-          </div>
+          </button>
         }
       </div>
+
+      @if (selectedGroupRow && selectedGroupExpenses.length > 0) {
+        <section class="group-expense-details" aria-label="Troškovi koji čine odabranu sumu">
+          <div class="group-expense-heading">
+            <div>
+              <h3>{{ selectedGroupName }}</h3>
+              <p>
+                {{ selectedGroupExpenses.length }} troškova čini sumu
+                {{ selectedGroupRow.totalAmountBam | number: '1.2-2' }} KM.
+              </p>
+            </div>
+            <button type="button" class="secondary-action compact-action" (click)="clearSelectedGroup()">
+              Sakrij troškove
+            </button>
+          </div>
+
+          <div class="table-wrap group-expense-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Naziv</th>
+                  <th>Iznos</th>
+                  <th>Iznos KM</th>
+                  <th>Datum</th>
+                  <th>Kategorija</th>
+                  <th>Odjel</th>
+                  <th>Valuta</th>
+                  <th>Dobavljač</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (expense of selectedGroupExpenses; track expense.id) {
+                  <tr>
+                    <td>{{ expense.naziv }}</td>
+                    <td>{{ expense.iznos | number: '1.2-2' }}</td>
+                    <td>{{ getExpenseAmountInBam(expense) | number: '1.2-2' }}</td>
+                    <td>{{ expense.datum | date: 'dd.MM.yyyy' }}</td>
+                    <td>{{ expense.kategorijaNaziv || 'Bez kategorije' }}</td>
+                    <td>{{ expense.odjelNaziv || 'Bez odjela' }}</td>
+                    <td>{{ getExpenseCurrency(expense) }}</td>
+                    <td>{{ expense.dobavljacNaziv || '-' }}</td>
+                    <td>{{ expense.statusValidacije || '-' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
 
       <div class="table-wrap">
         <table>

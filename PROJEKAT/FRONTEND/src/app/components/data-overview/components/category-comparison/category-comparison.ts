@@ -34,6 +34,7 @@ export class CategoryComparisonComponent {
   @Output() public selectedDepartmentsChange = new EventEmitter<Set<string>>();
   @Output() public dateFromChange = new EventEmitter<string>();
   @Output() public dateToChange = new EventEmitter<string>();
+  public selectedGroupName = '';
 
   private readonly exchangeRatesToBam: Record<string, number> = {
     BAM: 1,
@@ -178,7 +179,20 @@ export class CategoryComparisonComponent {
     return this.rows[this.rows.length - 1]?.groupName || '-';
   }
 
+  public get selectedGroupExpenses(): DataOverviewExpense[] {
+    if (!this.selectedGroupName) {
+      return [];
+    }
+
+    return this.comparisonExpenses.filter((expense) => this.getGroupName(expense) === this.selectedGroupName);
+  }
+
+  public get selectedGroupRow(): CategoryComparisonRow | null {
+    return this.rows.find((row) => row.groupName === this.selectedGroupName) || null;
+  }
+
   public setComparisonMode(mode: GroupComparisonMode): void {
+    this.clearSelectedGroup();
     this.comparisonModeChange.emit(mode);
   }
 
@@ -215,11 +229,24 @@ export class CategoryComparisonComponent {
   }
 
   public clearComparison(): void {
+    this.clearSelectedGroup();
     this.selectedCategoriesChange.emit(new Set());
     this.selectedDepartmentsChange.emit(new Set());
     this.dateFromChange.emit('');
     this.dateToChange.emit('');
     this.comparisonModeChange.emit('category');
+  }
+
+  public selectGroup(row: CategoryComparisonRow): void {
+    this.selectedGroupName = row.groupName;
+  }
+
+  public clearSelectedGroup(): void {
+    this.selectedGroupName = '';
+  }
+
+  public isGroupSelected(groupName: string): boolean {
+    return this.selectedGroupName === groupName;
   }
 
   public isHighestRow(row: CategoryComparisonRow): boolean {
@@ -238,7 +265,11 @@ export class CategoryComparisonComponent {
     return `${Math.max((row.totalAmountBam / this.highestCategoryAmount) * 100, 4)}%`;
   }
 
-  private getExpenseAmountInBam(expense: DataOverviewExpense): number {
+  public getExpenseCurrency(expense: DataOverviewExpense): string {
+    return expense.valutaKod || expense.valutaNaziv || '-';
+  }
+
+  public getExpenseAmountInBam(expense: DataOverviewExpense): number {
     const currencyCode = (expense.valutaKod || expense.valutaNaziv || 'BAM').toUpperCase();
     const rate = this.exchangeRatesToBam[currencyCode] ?? 1;
 
