@@ -34,6 +34,7 @@ export class CategoryComparisonComponent {
   @Output() public selectedDepartmentsChange = new EventEmitter<Set<string>>();
   @Output() public dateFromChange = new EventEmitter<string>();
   @Output() public dateToChange = new EventEmitter<string>();
+  public isChartVisible = false;
   public selectedGroupName = '';
 
   private readonly exchangeRatesToBam: Record<string, number> = {
@@ -235,6 +236,14 @@ export class CategoryComparisonComponent {
     this.dateFromChange.emit('');
     this.dateToChange.emit('');
     this.comparisonModeChange.emit('category');
+  }
+
+  public toggleChart(): void {
+    this.isChartVisible = !this.isChartVisible;
+
+    if (!this.isChartVisible) {
+      this.clearSelectedGroup();
+    }
   }
 
   public selectGroup(row: CategoryComparisonRow): void {

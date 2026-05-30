@@ -77,6 +77,9 @@
       (click)="clearComparison()">
       Očisti grupno poređenje
     </button>
+    <button type="button" class="secondary-action compact-action" (click)="toggleChart()">
+      {{ isChartVisible ? 'Sakrij grafikon' : 'Prikazi grafikon' }}
+    </button>
   </div>
 
   @if (!canCompare) {
@@ -112,6 +115,7 @@
         <strong>Nema troškova za odabrane kategorije i period.</strong>
       </div>
     } @else {
+      @if (isChartVisible) {
       <div class="category-comparison-bars">
         @for (row of rows; track row.groupName) {
           <button
@@ -180,6 +184,7 @@
             </table>
           </div>
         </section>
+      }
       }
 
       <div class="table-wrap">
