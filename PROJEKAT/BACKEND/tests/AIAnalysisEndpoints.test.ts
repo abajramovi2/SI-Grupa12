@@ -373,4 +373,85 @@ describe("POST /api/ai/analize/baza – AIAnalysisEndpoints", () => {
     expect(response.body).toEqual(risks);
     expect(mockAIAnalysisService.getSupplierDependencyRisk).toHaveBeenCalledWith(sampleReport);
   });
+
+  test("GET /api/ai/dobavljaci/rast vraca 500 kada report servis pukne", async () => {
+    mockReportService.getExpenseReport.mockRejectedValue(new Error("Report greska"));
+
+    const response = await request(app).get("/api/ai/dobavljaci/rast");
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe("Report greska");
+  });
+
+  test("POST /api/ai/asistent/pitaj vraca genericku 500 poruku kada greska nema message", async () => {
+    mockReportService.getExpenseReport.mockResolvedValue(sampleReport);
+    mockBudgetService.getAllBudgets.mockResolvedValue(sampleBudgets);
+    mockAIAnalysisService.askAssistantWithGemini.mockRejectedValue({});
+
+    const response = await request(app)
+      .post("/api/ai/asistent/pitaj")
+      .send({ question: "Koji trosak je najveci?" });
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe("Greska pri AI asistentu.");
+  });
+
+  test("GET /api/ai/executive-summary vraca 500 kada budzet servis pukne", async () => {
+    mockReportService.getExpenseReport.mockResolvedValue(sampleReport);
+    mockBudgetService.getAllBudgets.mockRejectedValue(new Error("Budzet greska"));
+
+    const response = await request(app).get("/api/ai/executive-summary");
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe("Budzet greska");
+  });
+
+  test("GET /api/ai/anomaly-explanation/:expenseId vraca genericku 500 poruku", async () => {
+    mockReportService.getExpenseReport.mockResolvedValue(sampleReport);
+    mockAIAnalysisService.explainAnomaly.mockImplementation(() => {
+      throw {};
+    });
+
+    const response = await request(app).get("/api/ai/anomaly-explanation/e1");
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe("Greska pri objasnjenju anomalije.");
+  });
+
+  test("GET /api/ai/cost-suggestions vraca 500 kada AI servis pukne", async () => {
+    mockReportService.getExpenseReport.mockResolvedValue(sampleReport);
+    mockBudgetService.getAllBudgets.mockResolvedValue(sampleBudgets);
+    mockAIAnalysisService.getCostOptimizationSuggestions.mockImplementation(() => {
+      throw new Error("Preporuke nisu dostupne");
+    });
+
+    const response = await request(app).get("/api/ai/cost-suggestions");
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe("Preporuke nisu dostupne");
+  });
+
+  test("GET /api/ai/missing-recurring-expenses vraca genericku 500 poruku", async () => {
+    mockReportService.getExpenseReport.mockResolvedValue(sampleReport);
+    mockAIAnalysisService.detectMissingRecurringExpenses.mockImplementation(() => {
+      throw {};
+    });
+
+    const response = await request(app).get("/api/ai/missing-recurring-expenses");
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe("Greska pri detekciji zaboravljenih troskova.");
+  });
+
+  test("GET /api/ai/supplier-risk vraca 500 kada analiza dobavljaca pukne", async () => {
+    mockReportService.getExpenseReport.mockResolvedValue(sampleReport);
+    mockAIAnalysisService.getSupplierDependencyRisk.mockImplementation(() => {
+      throw new Error("Supplier risk greska");
+    });
+
+    const response = await request(app).get("/api/ai/supplier-risk");
+
+    expect(response.status).toBe(500);
+    expect(response.body.message).toBe("Supplier risk greska");
+  });
 });

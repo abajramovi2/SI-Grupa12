@@ -370,6 +370,80 @@ describe("AIAnalysisService supplier growth and assistant", () => {
     expect(result.intent).toBe("TOP_EXPENSES");
     expect(result.data.expenses[0].naziv).toBe("Drugi");
   });
+
+  test("askAssistant vraca prazno stanje za top troskove bez podataka", () => {
+    const result = svc.askAssistant("top troskovi", { expenses: [] }, []);
+
+    expect(result.intent).toBe("TOP_EXPENSES");
+    expect(result.data.expenses).toHaveLength(0);
+  });
+
+  test("askAssistant vraca prazno stanje za najveci trosak bez podataka", () => {
+    const result = svc.askAssistant("najveci trosak", { expenses: [] }, []);
+
+    expect(result.intent).toBe("LARGEST_EXPENSE");
+    expect(result.data).toBeNull();
+  });
+
+  test("askAssistant vraca poruku kada nema kategorija, dobavljaca i odjela", () => {
+    expect(svc.askAssistant("koja kategorija najvise trosi", { expenses: [] }, []).answer).toContain("Nema dovoljno");
+    expect(svc.askAssistant("kome smo najvise platili", { expenses: [] }, []).answer).toContain("Nema dovoljno");
+    expect(svc.askAssistant("koji odjel najvise trosi", { expenses: [] }, []).answer).toContain("Nema dovoljno");
+  });
+
+  test("askAssistant vraca BUDGET_REMAINING kada budzet nije definisan", () => {
+    const result = svc.askAssistant("koliko je ostalo budzeta", { expenses: [{ iznos: 100 }] }, []);
+
+    expect(result.intent).toBe("BUDGET_REMAINING");
+    expect(result.data.budgetTotal).toBe(0);
+  });
+
+  test("askAssistant vraca prazno stanje za najveću anomaliju i rast dobavljaca", () => {
+    const anomaly = svc.askAssistant("koja je najveca anomalija", { expenses: [] }, []);
+    const supplier = svc.askAssistant("koji dobavljac ima najveci rast", { expenses: [] }, []);
+
+    expect(anomaly.intent).toBe("BIGGEST_ANOMALY");
+    expect(anomaly.data.anomalies).toHaveLength(0);
+    expect(supplier.intent).toBe("SUPPLIER_GROWTH");
+    expect(supplier.data.suppliers).toHaveLength(0);
+  });
+
+  test("askAssistant pokriva opci budzet, kategoriju, odjel i anomalije", () => {
+    const commonReport = {
+      summary: { totalAmount: 1200, budgetTotal: 1000 },
+      breakdowns: {
+        byCategory: [{ label: "Oprema", total: 900 }],
+        byDepartment: [{ label: "IT", total: 900 }],
+      },
+      expenses: [{ naziv: "Dupli", iznos: 100, statusValidacije: "POTENCIJALNI_DUPLIKAT" }],
+    };
+
+    expect(svc.askAssistant("da li je budzet prekoracen", commonReport, []).intent).toBe("BUDGET_STATUS");
+    expect(svc.askAssistant("kategorija", commonReport, []).intent).toBe("CATEGORY");
+    expect(svc.askAssistant("odjel", commonReport, []).intent).toBe("DEPARTMENT");
+    expect(svc.askAssistant("ima li anomalija", commonReport, []).intent).toBe("ANOMALY_COUNT");
+  });
+
+  test("askAssistantWithGemini pada na fallback ako Gemini vrati prazan tekst", async () => {
+    const previousKey = process.env.GEMINI_API_KEY;
+    process.env.GEMINI_API_KEY = "test-key";
+    svc.geminiClient = {
+      models: {
+        generateContent: jest.fn().mockResolvedValue({ text: "   " }),
+      },
+    };
+
+    const result = await svc.askAssistantWithGemini("koji trosak je najveci", reportData, []);
+
+    expect(result.source).toBe("fallback");
+    expect(result.intent).toBe("LARGEST_EXPENSE");
+
+    if (previousKey === undefined) {
+      delete process.env.GEMINI_API_KEY;
+    } else {
+      process.env.GEMINI_API_KEY = previousKey;
+    }
+  });
 });
 
 describe("AIAnalysisService dashboard AI helpers", () => {
@@ -463,6 +537,143 @@ describe("AIAnalysisService dashboard AI helpers", () => {
     expect(result.topExpenses).toHaveLength(10);
     expect(result.categories.length).toBeLessThanOrEqual(10);
     expect(result.departments.length).toBeLessThanOrEqual(10);
+  });
+
+  test("getTopGrowingSuppliers vraca praznu listu bez validnog mjeseca", () => {
+    const result = svc.getTopGrowingSuppliers({ expenses: [{ datum: "15.05.2026", iznos: 100, dobavljacNaziv: "Dell" }] });
+
+    expect(result.suppliers).toHaveLength(0);
+  });
+
+  test("getTopGrowingSuppliers prepoznaje pad i stabilnu potrosnju", () => {
+    const result = svc.getTopGrowingSuppliers({
+      expenses: [
+        { datum: "2026-04-01", iznos: 1000, dobavljacNaziv: "Pada" },
+        { datum: "2026-05-01", iznos: 900, dobavljacNaziv: "Pada" },
+        { datum: "2026-04-01", iznos: 1000, dobavljacNaziv: "Stabilan" },
+        { datum: "2026-05-01", iznos: 1030, dobavljacNaziv: "Stabilan" },
+      ],
+    });
+
+    expect(result.suppliers.find((item: any) => item.supplierName === "Pada").status).toBe("decline");
+    expect(result.suppliers.find((item: any) => item.supplierName === "Stabilan").status).toBe("stable");
+  });
+
+  test("getExecutiveSummary pokriva pad i stanje bez anomalija", () => {
+    const result = svc.getExecutiveSummary({
+      summary: { budgetUtilizationPercent: 50 },
+      expenses: [
+        { datum: "2026-01-01", iznos: 500 },
+        { datum: "2026-02-01", iznos: 500 },
+        { datum: "2026-03-01", iznos: 500 },
+        { datum: "2026-04-01", iznos: 100 },
+        { datum: "2026-05-01", iznos: 100 },
+        { datum: "2026-06-01", iznos: 100 },
+      ],
+    }, []);
+
+    expect(result.summary.some((item: any) => item.type === "SUCCESS")).toBe(true);
+    expect(result.summary.some((item: any) => item.message.includes("Nema otvorenih anomalija"))).toBe(true);
+  });
+
+  test("explainAnomaly prepoznaje srednji rizik za duplikat i nedefinisanu kategoriju", () => {
+    const result = svc.explainAnomaly("1", {
+      expenses: [
+        { id: "1", naziv: "Pretplata", iznos: 100 },
+        { id: "2", naziv: "Pretplata", iznos: 101 },
+      ],
+    });
+
+    expect(result.severity).toBe("MEDIUM");
+    expect(result.explanation).toContain("moguci duplikat");
+  });
+
+  test("getCostOptimizationSuggestions vraca informativnu preporuku kada nema signala", () => {
+    const result = svc.getCostOptimizationSuggestions({ expenses: [], summary: { totalAmount: 0 } }, []);
+
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0].title).toBe("Nema kriticnih preporuka");
+  });
+
+  test("detectMissingRecurringExpenses vraca prazno kada nema trenutnog mjeseca ili nista ne nedostaje", () => {
+    expect(svc.detectMissingRecurringExpenses({ expenses: [] }).missingRecurringExpenses).toHaveLength(0);
+    expect(svc.detectMissingRecurringExpenses({
+      expenses: [
+        { naziv: "Internet", datum: "2026-03-01", iznos: 100 },
+        { naziv: "Internet", datum: "2026-04-01", iznos: 100 },
+        { naziv: "Internet", datum: "2026-05-01", iznos: 100 },
+      ],
+    }).missingRecurringExpenses).toHaveLength(0);
+  });
+
+  test("getSupplierDependencyRisk vraca prazno bez dobavljaca i pokriva total 0", () => {
+    expect(svc.getSupplierDependencyRisk({ expenses: [] }).risks).toHaveLength(0);
+    expect(svc.getSupplierDependencyRisk({ expenses: [{ iznos: 0, dobavljacNaziv: "Dell", kategorijaNaziv: "Oprema" }] }).risks).toHaveLength(0);
+  });
+
+  test("buildAssistantContextData radi i sa planirani_iznos i bez breakdowna", () => {
+    const result = (svc as any).buildAssistantContextData({
+      summary: {},
+      expenses: [
+        { id: "1", naziv: "Sumnjivo", datum: "2026-05-01", iznos: 100, statusValidacije: "ANOMALIJA", kategorija: "Oprema", odjel: "IT", dobavljac: "Dell" },
+      ],
+    }, [
+      { naziv: "Budzet", planirani_iznos: 1000, datum_pocetka: "2026-01-01", datum_zavrsetka: "2026-12-31", odjel: "IT" },
+    ]);
+
+    expect(result.anomalies).toHaveLength(1);
+    expect(result.budgets.total).toBe(1000);
+    expect(result.categories[0].label).toBe("Oprema");
+  });
+});
+
+describe("AIAnalysisService targeted branch coverage", () => {
+  let svc: any;
+  let fetchSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    svc = new AIAnalysisService("http://ai-service.test/");
+    fetchSpy = jest.spyOn(global, "fetch" as any);
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  test("detectAmountOutlier pokriva z-score i iqr nalaze", () => {
+    const zScore = (svc as any).detectAmountOutlier(102, [100, 100, 100, 100, 101, 99, 100]);
+    const iqr = (svc as any).detectAmountOutlier(11, [10, 10, 10, 10]);
+
+    expect(zScore.type).toBe("AMOUNT_OUTLIER_ZSCORE");
+    expect(iqr.type).toBe("AMOUNT_OUTLIER_IQR");
+  });
+
+  test("analyzeExpense vraca AI odgovor i dodaje missing budget nalaz kada treba", async () => {
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        status: "VALIDAN",
+        severity: "LOW",
+        riskScore: 0.1,
+        findings: [],
+      }),
+    } as any);
+
+    const result = await svc.analyzeExpense(
+      { iznos: 100, odjelId: "o1", kategorijaId: "k1", datum: "2026-05-01" },
+      { requiresBudget: true, budget: null }
+    );
+
+    expect(result.status).toBe("ANOMALIJA");
+    expect(result.findings.some((finding: any) => finding.type === "BUDGET_NOT_DEFINED")).toBe(true);
+  });
+
+  test("analyzeExpense pada na fallback kada AI servis vrati gresku", async () => {
+    fetchSpy.mockResolvedValue({ ok: false, status: 503 } as any);
+
+    const result = await svc.analyzeExpense({ iznos: 100 }, {});
+
+    expect(result.status).toBe("VALIDAN");
   });
 });
 
