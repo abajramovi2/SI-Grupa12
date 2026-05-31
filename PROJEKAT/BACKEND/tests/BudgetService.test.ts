@@ -651,7 +651,7 @@ describe("BudgetService", () => {
       const result = await service.submitujDoradu(1, authUser);
 
       expect(result).toEqual(updated);
-      expect(mockBudgetRepository.updateStatus).toHaveBeenCalledWith("1", "na_cekanju", null);
+      expect(mockBudgetRepository.updateStatus).toHaveBeenCalledWith("1", "na_cekanju", "fd-1");
       expect(mockBudgetRepository.dodajKomentar).toHaveBeenCalledWith(
         "1",
         "creator-1",

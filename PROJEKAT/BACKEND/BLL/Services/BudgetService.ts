@@ -226,7 +226,7 @@ export class BudgetService implements IBudgetService {
     const updatedBudget = await this.budgetRepository.updateStatus(
       String(budzetId),
       "na_cekanju",
-      null
+      finansijskiDirektorId
     );
 
     await this.budgetRepository.dodajKomentar(
