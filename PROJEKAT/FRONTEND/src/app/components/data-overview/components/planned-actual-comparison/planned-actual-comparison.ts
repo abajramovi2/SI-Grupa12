@@ -10,6 +10,11 @@ type PlannedActualRow = {
   utilization: number | null;
   status: string;
 };
+type ComparisonChartType = 'bar' | 'pie';
+type PlannedActualPieSegment = PlannedActualRow & {
+  color: string;
+  path: string;
+};
 
 @Component({
   selector: 'app-planned-actual-comparison',
@@ -30,6 +35,14 @@ export class PlannedActualComparisonComponent {
   @Output() public selectedDepartmentsChange = new EventEmitter<Set<string>>();
   @Output() public dateFromChange = new EventEmitter<string>();
   @Output() public dateToChange = new EventEmitter<string>();
+  public chartType: ComparisonChartType = 'bar';
+  public readonly chartTypes: Array<{ value: ComparisonChartType; label: string }> = [
+    { value: 'bar', label: 'Stubičasti' },
+    { value: 'pie', label: 'Kružni' },
+  ];
+  public selectedGroupName = '';
+  public isChartVisible = false;
+  private readonly chartColors = ['#1769ff', '#12b76a', '#f97316', '#7c3aed', '#06b6d4', '#ef4444'];
 
   private readonly exchangeRatesToBam: Record<string, number> = {
     BAM: 1,
@@ -136,6 +149,96 @@ export class PlannedActualComparisonComponent {
       .sort((first, second) => second.variance - first.variance)[0];
 
     return row ? `${row.groupName}: ${row.variance.toLocaleString('bs-BA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} KM` : '-';
+  }
+
+  public get highestChartAmount(): number {
+    return Math.max(...this.rows.flatMap((row) => [row.plannedAmount, row.actualAmount]), 0);
+  }
+
+  public get pieGradient(): string {
+    let current = 0;
+    const colors = ['#1769ff', '#12b76a', '#f97316', '#7c3aed', '#06b6d4', '#ef4444'];
+
+    if (!this.totalActualAmount) {
+      return '#edf1f7';
+    }
+
+    return this.rows
+      .map((row, index) => {
+        const next = current + (row.actualAmount / this.totalActualAmount) * 100;
+        const segment = `${colors[index % colors.length]} ${current}% ${next}%`;
+        current = next;
+        return segment;
+      })
+      .join(', ');
+  }
+
+  public get pieSegments(): PlannedActualPieSegment[] {
+    let current = 0;
+
+    if (!this.totalActualAmount) {
+      return [];
+    }
+
+    return this.rows.map((row, index) => {
+      const start = current;
+      const end = current + (row.actualAmount / this.totalActualAmount) * 360;
+      current = end;
+
+      return {
+        ...row,
+        color: this.chartColors[index % this.chartColors.length],
+        path: this.describeArc(50, 50, 42, start, end),
+      };
+    });
+  }
+
+  public get selectedGroupExpenses(): DataOverviewExpense[] {
+    if (!this.selectedGroupName) {
+      return [];
+    }
+
+    return this.filteredExpenses.filter((expense) => {
+      const groupName = this.getGroupName(this.getExpenseCategoryName(expense), this.getDepartmentName(expense.odjelNaziv));
+      return groupName === this.selectedGroupName;
+    });
+  }
+
+  public get selectedGroupRow(): PlannedActualRow | null {
+    return this.rows.find((row) => row.groupName === this.selectedGroupName) || null;
+  }
+
+  public getBarHeight(value: number): string {
+    return this.highestChartAmount > 0 ? `${Math.max((value / this.highestChartAmount) * 100, 4)}%` : '0%';
+  }
+  public getExpenseCountForGroup(groupName: string): number {
+  return this.filteredExpenses.filter((expense) =>
+    this.getGroupName(this.getExpenseCategoryName(expense), this.getDepartmentName(expense.odjelNaziv)) === groupName
+  ).length;
+}
+
+  public toggleChart(): void {
+    this.isChartVisible = !this.isChartVisible;
+  }
+
+  public selectGroup(row: PlannedActualRow): void {
+    this.selectedGroupName = row.groupName;
+  }
+
+  public clearSelectedGroup(): void {
+    this.selectedGroupName = '';
+  }
+
+  public isGroupSelected(groupName: string): boolean {
+    return this.selectedGroupName === groupName;
+  }
+
+  public getExpenseCurrency(expense: DataOverviewExpense): string {
+    return expense.valutaKod || expense.valutaNaziv || '-';
+  }
+
+  public getDisplayExpenseAmountInBam(expense: DataOverviewExpense): number {
+    return this.getExpenseAmountInBam(expense);
   }
 
   public toggleCategory(categoryName: string): void {
@@ -275,5 +378,27 @@ export class PlannedActualComparisonComponent {
     }
 
     return 'U okviru budžeta';
+  }
+
+  private describeArc(centerX: number, centerY: number, radius: number, startAngle: number, endAngle: number): string {
+    const start = this.polarToCartesian(centerX, centerY, radius, endAngle);
+    const end = this.polarToCartesian(centerX, centerY, radius, startAngle);
+    const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+
+    return [
+      `M ${centerX} ${centerY}`,
+      `L ${start.x} ${start.y}`,
+      `A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`,
+      'Z',
+    ].join(' ');
+  }
+
+  private polarToCartesian(centerX: number, centerY: number, radius: number, angleInDegrees: number): { x: number; y: number } {
+    const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
+
+    return {
+      x: centerX + radius * Math.cos(angleInRadians),
+      y: centerY + radius * Math.sin(angleInRadians),
+    };
   }
 }

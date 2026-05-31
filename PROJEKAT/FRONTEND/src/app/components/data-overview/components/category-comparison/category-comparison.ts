@@ -13,6 +13,11 @@ type CategoryComparisonRow = {
 };
 
 type GroupComparisonMode = 'category' | 'department' | 'categoryDepartment' | 'period';
+type ComparisonChartType = 'bar' | 'pie';
+type PieSegment = CategoryComparisonRow & {
+  color: string;
+  path: string;
+};
 
 @Component({
   selector: 'app-category-comparison',
@@ -34,6 +39,14 @@ export class CategoryComparisonComponent {
   @Output() public selectedDepartmentsChange = new EventEmitter<Set<string>>();
   @Output() public dateFromChange = new EventEmitter<string>();
   @Output() public dateToChange = new EventEmitter<string>();
+  public isChartVisible = false;
+  public selectedGroupName = '';
+  public chartType: ComparisonChartType = 'bar';
+  public readonly chartTypes: Array<{ value: ComparisonChartType; label: string }> = [
+    { value: 'bar', label: 'Stubičasti' },
+    { value: 'pie', label: 'Kružni' },
+  ];
+  private readonly chartColors = ['#1769ff', '#12b76a', '#f97316', '#7c3aed', '#06b6d4', '#ef4444'];
 
   private readonly exchangeRatesToBam: Record<string, number> = {
     BAM: 1,
@@ -178,7 +191,58 @@ export class CategoryComparisonComponent {
     return this.rows[this.rows.length - 1]?.groupName || '-';
   }
 
+  public get selectedGroupExpenses(): DataOverviewExpense[] {
+    if (!this.selectedGroupName) {
+      return [];
+    }
+
+    return this.comparisonExpenses.filter((expense) => this.getGroupName(expense) === this.selectedGroupName);
+  }
+
+  public get selectedGroupRow(): CategoryComparisonRow | null {
+    return this.rows.find((row) => row.groupName === this.selectedGroupName) || null;
+  }
+
+  public get pieGradient(): string {
+    let current = 0;
+    const colors = ['#1769ff', '#12b76a', '#f97316', '#7c3aed', '#06b6d4', '#ef4444'];
+
+    if (!this.totalAmount) {
+      return '#edf1f7';
+    }
+
+    return this.rows
+      .map((row, index) => {
+        const next = current + (row.totalAmountBam / this.totalAmount) * 100;
+        const segment = `${colors[index % colors.length]} ${current}% ${next}%`;
+        current = next;
+        return segment;
+      })
+      .join(', ');
+  }
+
+  public get pieSegments(): PieSegment[] {
+    let current = 0;
+
+    if (!this.totalAmount) {
+      return [];
+    }
+
+    return this.rows.map((row, index) => {
+      const start = current;
+      const end = current + (row.totalAmountBam / this.totalAmount) * 360;
+      current = end;
+
+      return {
+        ...row,
+        color: this.chartColors[index % this.chartColors.length],
+        path: this.describeArc(50, 50, 42, start, end),
+      };
+    });
+  }
+
   public setComparisonMode(mode: GroupComparisonMode): void {
+    this.clearSelectedGroup();
     this.comparisonModeChange.emit(mode);
   }
 
@@ -215,6 +279,7 @@ export class CategoryComparisonComponent {
   }
 
   public clearComparison(): void {
+    this.clearSelectedGroup();
     this.selectedCategoriesChange.emit(new Set());
     this.selectedDepartmentsChange.emit(new Set());
     this.dateFromChange.emit('');
@@ -222,6 +287,25 @@ export class CategoryComparisonComponent {
     this.comparisonModeChange.emit('category');
   }
 
+  public toggleChart(): void {
+    this.isChartVisible = !this.isChartVisible;
+
+    if (!this.isChartVisible) {
+      this.clearSelectedGroup();
+    }
+  }
+
+  public selectGroup(row: CategoryComparisonRow): void {
+    this.selectedGroupName = row.groupName;
+  }
+
+  public clearSelectedGroup(): void {
+    this.selectedGroupName = '';
+  }
+
+  public isGroupSelected(groupName: string): boolean {
+    return this.selectedGroupName === groupName;
+  }
   public onDisplayDateChange(value: string, fieldName: 'from' | 'to'): void {
     const isoDate = this.toIsoDate(value);
     if (fieldName === 'from') {
@@ -253,7 +337,11 @@ export class CategoryComparisonComponent {
     return `${Math.max((row.totalAmountBam / this.highestCategoryAmount) * 100, 4)}%`;
   }
 
-  private getExpenseAmountInBam(expense: DataOverviewExpense): number {
+  public getExpenseCurrency(expense: DataOverviewExpense): string {
+    return expense.valutaKod || expense.valutaNaziv || '-';
+  }
+
+  public getExpenseAmountInBam(expense: DataOverviewExpense): number {
     const currencyCode = (expense.valutaKod || expense.valutaNaziv || 'BAM').toUpperCase();
     const rate = this.exchangeRatesToBam[currencyCode] ?? 1;
 
@@ -310,6 +398,28 @@ export class CategoryComparisonComponent {
     }
 
     return trimmed.match(/^\d{4}-\d{2}-\d{2}$/) ? trimmed : '';
+  }
+
+  private describeArc(centerX: number, centerY: number, radius: number, startAngle: number, endAngle: number): string {
+    const start = this.polarToCartesian(centerX, centerY, radius, endAngle);
+    const end = this.polarToCartesian(centerX, centerY, radius, startAngle);
+    const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+
+    return [
+      `M ${centerX} ${centerY}`,
+      `L ${start.x} ${start.y}`,
+      `A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`,
+      'Z',
+    ].join(' ');
+  }
+
+  private polarToCartesian(centerX: number, centerY: number, radius: number, angleInDegrees: number): { x: number; y: number } {
+    const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
+
+    return {
+      x: centerX + radius * Math.cos(angleInRadians),
+      y: centerY + radius * Math.sin(angleInRadians),
+    };
   }
 
 }

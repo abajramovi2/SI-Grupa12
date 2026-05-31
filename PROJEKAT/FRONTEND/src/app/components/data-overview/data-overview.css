@@ -121,7 +121,13 @@ h2 {
   font-weight: 800;
 }
  
-.date-filter-group input[type="date"] {
+.date-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  gap: 8px;
+}
+
+.date-filter-group input {
   height: 38px;
   padding: 0 12px;
   border: 1.5px solid #d9e2ef;
@@ -133,8 +139,21 @@ h2 {
   box-sizing: border-box;
   cursor: pointer;
 }
+
+.date-picker {
+  padding: 10px 8px;
+  color: transparent;
+}
+
+.date-picker::-webkit-datetime-edit {
+  display: none;
+}
+
+.date-picker::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
  
-.date-filter-group input[type="date"]:focus {
+.date-filter-group input:focus {
   border-color: #1769ff;
   box-shadow: 0 0 0 3px rgba(23, 105, 255, 0.12);
 }
@@ -564,7 +583,7 @@ tbody tr:last-child td {
   }
  
   .filter-row select,
-  .date-filter-group input[type="date"],
+  .date-inputs,
   .btn-reset,
   .compare-action,
   .compact-action {

@@ -32,6 +32,51 @@
     </article>
   </div>
 
+  <div class="chart-toolbar">
+    <span>Tip grafikona</span>
+    <div class="chart-type-group" aria-label="Tip grafikona">
+      @for (type of chartTypes; track type.value) {
+        <button
+          type="button"
+          class="chart-type-button"
+          [class.chart-type-active]="chartType === type.value"
+          (click)="chartType = type.value">
+          {{ type.label }}
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (chartRows.length > 0) {
+    <div class="chart-box" [class.pie-chart-box]="chartType === 'pie'">
+      @if (chartType === 'bar') {
+        <div class="chart-bars">
+          @for (row of chartRows; track row.label) {
+            <div class="chart-row">
+              <div class="chart-row-label">
+                <strong>{{ row.label }}</strong>
+                <span>{{ row.value | number: '1.2-2' }} KM</span>
+              </div>
+              <div class="chart-track" aria-hidden="true">
+                <div class="chart-fill" [style.width.%]="row.percentage"></div>
+              </div>
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="pie-chart" [style.background]="'conic-gradient(' + pieGradient + ')'"></div>
+        <div class="pie-legend">
+          @for (row of chartRows; track row.label) {
+            <span class="pie-legend-row">
+              <span class="legend-swatch" [style.background]="row.color"></span>
+              {{ row.label }}: {{ row.value | number: '1.2-2' }} KM
+            </span>
+          }
+        </div>
+      }
+    </div>
+  }
+
   <div class="table-wrap">
     <table>
       <thead>
