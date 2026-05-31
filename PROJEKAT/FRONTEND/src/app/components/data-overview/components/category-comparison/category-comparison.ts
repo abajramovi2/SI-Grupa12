@@ -13,6 +13,11 @@ type CategoryComparisonRow = {
 };
 
 type GroupComparisonMode = 'category' | 'department' | 'categoryDepartment' | 'period';
+type ComparisonChartType = 'bar' | 'pie';
+type PieSegment = CategoryComparisonRow & {
+  color: string;
+  path: string;
+};
 
 @Component({
   selector: 'app-category-comparison',
@@ -36,6 +41,12 @@ export class CategoryComparisonComponent {
   @Output() public dateToChange = new EventEmitter<string>();
   public isChartVisible = false;
   public selectedGroupName = '';
+  public chartType: ComparisonChartType = 'bar';
+  public readonly chartTypes: Array<{ value: ComparisonChartType; label: string }> = [
+    { value: 'bar', label: 'Stubičasti' },
+    { value: 'pie', label: 'Kružni' },
+  ];
+  private readonly chartColors = ['#1769ff', '#12b76a', '#f97316', '#7c3aed', '#06b6d4', '#ef4444'];
 
   private readonly exchangeRatesToBam: Record<string, number> = {
     BAM: 1,
@@ -190,6 +201,44 @@ export class CategoryComparisonComponent {
 
   public get selectedGroupRow(): CategoryComparisonRow | null {
     return this.rows.find((row) => row.groupName === this.selectedGroupName) || null;
+  }
+
+  public get pieGradient(): string {
+    let current = 0;
+    const colors = ['#1769ff', '#12b76a', '#f97316', '#7c3aed', '#06b6d4', '#ef4444'];
+
+    if (!this.totalAmount) {
+      return '#edf1f7';
+    }
+
+    return this.rows
+      .map((row, index) => {
+        const next = current + (row.totalAmountBam / this.totalAmount) * 100;
+        const segment = `${colors[index % colors.length]} ${current}% ${next}%`;
+        current = next;
+        return segment;
+      })
+      .join(', ');
+  }
+
+  public get pieSegments(): PieSegment[] {
+    let current = 0;
+
+    if (!this.totalAmount) {
+      return [];
+    }
+
+    return this.rows.map((row, index) => {
+      const start = current;
+      const end = current + (row.totalAmountBam / this.totalAmount) * 360;
+      current = end;
+
+      return {
+        ...row,
+        color: this.chartColors[index % this.chartColors.length],
+        path: this.describeArc(50, 50, 42, start, end),
+      };
+    });
   }
 
   public setComparisonMode(mode: GroupComparisonMode): void {
@@ -349,6 +398,28 @@ export class CategoryComparisonComponent {
     }
 
     return trimmed.match(/^\d{4}-\d{2}-\d{2}$/) ? trimmed : '';
+  }
+
+  private describeArc(centerX: number, centerY: number, radius: number, startAngle: number, endAngle: number): string {
+    const start = this.polarToCartesian(centerX, centerY, radius, endAngle);
+    const end = this.polarToCartesian(centerX, centerY, radius, startAngle);
+    const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+
+    return [
+      `M ${centerX} ${centerY}`,
+      `L ${start.x} ${start.y}`,
+      `A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`,
+      'Z',
+    ].join(' ');
+  }
+
+  private polarToCartesian(centerX: number, centerY: number, radius: number, angleInDegrees: number): { x: number; y: number } {
+    const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
+
+    return {
+      x: centerX + radius * Math.cos(angleInRadians),
+      y: centerY + radius * Math.sin(angleInRadians),
+    };
   }
 
 }

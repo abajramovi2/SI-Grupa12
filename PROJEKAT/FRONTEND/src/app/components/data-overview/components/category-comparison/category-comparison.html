@@ -31,12 +31,28 @@
   <div class="category-compare-grid">
     <div class="date-filter-group">
       <label>Datum od</label>
-      <input type="text" [value]="toDisplayDate(dateFrom)" placeholder="DD.MM.YYYY" (input)="onDisplayDateChange($any($event.target).value, 'from')" />
+      <div class="date-inputs">
+        <input type="text" [value]="toDisplayDate(dateFrom)" placeholder="DD.MM.YYYY" (input)="onDisplayDateChange($any($event.target).value, 'from')" />
+        <input
+          type="date"
+          class="date-picker"
+          title="Odaberite početni datum"
+          [value]="dateFrom"
+          (change)="onDisplayDateChange($any($event.target).value, 'from')" />
+      </div>
     </div>
 
     <div class="date-filter-group">
       <label>Datum do</label>
-      <input type="text" [value]="toDisplayDate(dateTo)" placeholder="DD.MM.YYYY" (input)="onDisplayDateChange($any($event.target).value, 'to')" />
+      <div class="date-inputs">
+        <input type="text" [value]="toDisplayDate(dateTo)" placeholder="DD.MM.YYYY" (input)="onDisplayDateChange($any($event.target).value, 'to')" />
+        <input
+          type="date"
+          class="date-picker"
+          title="Odaberite krajnji datum"
+          [value]="dateTo"
+          (change)="onDisplayDateChange($any($event.target).value, 'to')" />
+      </div>
     </div>
   </div>
 
@@ -82,6 +98,23 @@
     </button>
   </div>
 
+  @if (isChartVisible) {
+    <div class="chart-toolbar">
+      <span>Tip grafikona</span>
+      <div class="chart-type-group" aria-label="Tip grafikona">
+        @for (type of chartTypes; track type.value) {
+          <button
+            type="button"
+            class="chart-type-button"
+            [class.chart-type-active]="chartType === type.value"
+            (click)="chartType = type.value">
+            {{ type.label }}
+          </button>
+        }
+      </div>
+    </div>
+  }
+
   @if (!canCompare) {
     <div class="empty-state compact-state">
       <strong>{{ emptySelectionMessage }}</strong>
@@ -116,25 +149,50 @@
       </div>
     } @else {
       @if (isChartVisible) {
-      <div class="category-comparison-bars">
-        @for (row of rows; track row.groupName) {
-          <button
-            type="button"
-            class="category-bar-row"
-            [class.selected-category-row]="isGroupSelected(row.groupName)"
-            [class.top-category-row]="isHighestRow(row)"
-            [class.low-category-row]="isLowestRow(row)"
-            (click)="selectGroup(row)">
-            <div class="category-bar-label">
-              <strong>{{ row.groupName }}</strong>
-              <span>{{ row.totalAmountBam | number: '1.2-2' }} KM · {{ row.expenseCount }} troškova</span>
+        <div class="chart-box" [class.pie-chart-box]="chartType === 'pie'">
+          @if (chartType === 'bar') {
+            <div class="category-comparison-bars">
+              @for (row of rows; track row.groupName) {
+                <button
+                  type="button"
+                  class="category-bar-row"
+                  [class.selected-category-row]="isGroupSelected(row.groupName)"
+                  [class.top-category-row]="isHighestRow(row)"
+                  [class.low-category-row]="isLowestRow(row)"
+                  (click)="selectGroup(row)">
+                  <div class="category-bar-label">
+                    <strong>{{ row.groupName }}</strong>
+                    <span>{{ row.totalAmountBam | number: '1.2-2' }} KM · {{ row.expenseCount }} troškova</span>
+                  </div>
+                  <div class="category-bar-track" aria-hidden="true">
+                    <div class="category-bar-fill" [style.width]="getBarWidth(row)"></div>
+                  </div>
+                </button>
+              }
             </div>
-            <div class="category-bar-track" aria-hidden="true">
-              <div class="category-bar-fill" [style.width]="getBarWidth(row)"></div>
+          } @else {
+            <svg class="pie-chart" viewBox="0 0 100 100" aria-label="Kružni grafikon grupnog poređenja">
+              @for (segment of pieSegments; track segment.groupName) {
+                <path
+                  class="pie-segment"
+                  [class.pie-segment-selected]="isGroupSelected(segment.groupName)"
+                  [attr.d]="segment.path"
+                  [attr.fill]="segment.color"
+                  (click)="selectGroup(segment)">
+                  <title>{{ segment.groupName }}: {{ segment.totalAmountBam | number: '1.2-2' }} KM</title>
+                </path>
+              }
+            </svg>
+            <div class="pie-legend">
+              @for (segment of pieSegments; track segment.groupName) {
+                <button type="button" class="pie-legend-row" [class.selected-category-row]="isGroupSelected(segment.groupName)" (click)="selectGroup(segment)">
+                  <span class="legend-swatch" [style.background]="segment.color"></span>
+                  {{ segment.groupName }}: {{ segment.totalAmountBam | number: '1.2-2' }} KM
+                </button>
+              }
             </div>
-          </button>
-        }
-      </div>
+          }
+        </div>
 
       @if (selectedGroupRow && selectedGroupExpenses.length > 0) {
         <section class="group-expense-details" aria-label="Troškovi koji čine odabranu sumu">
