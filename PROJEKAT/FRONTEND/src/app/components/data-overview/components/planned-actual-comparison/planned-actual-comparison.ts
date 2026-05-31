@@ -41,6 +41,7 @@ export class PlannedActualComparisonComponent {
     { value: 'pie', label: 'Kružni' },
   ];
   public selectedGroupName = '';
+  public isChartVisible = false;
   private readonly chartColors = ['#1769ff', '#12b76a', '#f97316', '#7c3aed', '#06b6d4', '#ef4444'];
 
   private readonly exchangeRatesToBam: Record<string, number> = {
@@ -207,8 +208,17 @@ export class PlannedActualComparisonComponent {
     return this.rows.find((row) => row.groupName === this.selectedGroupName) || null;
   }
 
-  public getBarWidth(value: number): string {
+  public getBarHeight(value: number): string {
     return this.highestChartAmount > 0 ? `${Math.max((value / this.highestChartAmount) * 100, 4)}%` : '0%';
+  }
+  public getExpenseCountForGroup(groupName: string): number {
+  return this.filteredExpenses.filter((expense) =>
+    this.getGroupName(this.getExpenseCategoryName(expense), this.getDepartmentName(expense.odjelNaziv)) === groupName
+  ).length;
+}
+
+  public toggleChart(): void {
+    this.isChartVisible = !this.isChartVisible;
   }
 
   public selectGroup(row: PlannedActualRow): void {

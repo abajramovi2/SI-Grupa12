@@ -12,24 +12,14 @@
       Datum od
       <div class="date-inputs">
         <input type="text" [value]="toDisplayDate(dateFrom)" placeholder="DD.MM.YYYY" (input)="onDisplayDateChange($any($event.target).value, 'from')" />
-        <input
-          type="date"
-          class="date-picker"
-          title="Odaberite početni datum"
-          [value]="dateFrom"
-          (change)="onDisplayDateChange($any($event.target).value, 'from')" />
+        <input type="date" class="date-picker" title="Odaberite početni datum" [value]="dateFrom" (change)="onDisplayDateChange($any($event.target).value, 'from')" />
       </div>
     </label>
     <label>
       Datum do
       <div class="date-inputs">
         <input type="text" [value]="toDisplayDate(dateTo)" placeholder="DD.MM.YYYY" (input)="onDisplayDateChange($any($event.target).value, 'to')" />
-        <input
-          type="date"
-          class="date-picker"
-          title="Odaberite krajnji datum"
-          [value]="dateTo"
-          (change)="onDisplayDateChange($any($event.target).value, 'to')" />
+        <input type="date" class="date-picker" title="Odaberite krajnji datum" [value]="dateTo" (change)="onDisplayDateChange($any($event.target).value, 'to')" />
       </div>
     </label>
   </div>
@@ -67,24 +57,30 @@
       (click)="clearComparison()">
       Očisti poređenje
     </button>
-    <div class="chart-type-group" aria-label="Tip grafikona">
-      @for (type of chartTypes; track type.value) {
-        <button
-          type="button"
-          class="chart-type-button"
-          [class.chart-type-active]="chartType === type.value"
-          (click)="chartType = type.value">
-          {{ type.label }}
-        </button>
-      }
-    </div>
-<p class="comparison-legend">
-  Pozitivno odstupanje znači da je stvarna potrošnja veća od planirane,
-  dok negativno odstupanje znači da budžet nije u potpunosti iskorišten.
-</p>
-    </div>
-  
-<div class="summary">
+    <button type="button" class="secondary-action compact-action" (click)="toggleChart()">
+      {{ isChartVisible ? 'Sakrij grafikon' : 'Prikaži grafikon' }}
+    </button>
+    @if (isChartVisible) {
+      <div class="chart-type-group" aria-label="Tip grafikona">
+        @for (type of chartTypes; track type.value) {
+          <button
+            type="button"
+            class="chart-type-button"
+            [class.chart-type-active]="chartType === type.value"
+            (click)="chartType = type.value">
+            {{ type.label }}
+          </button>
+        }
+      </div>
+    }
+  </div>
+
+  <p class="comparison-legend">
+    Pozitivno odstupanje znači da je stvarna potrošnja veća od planirane,
+    dok negativno odstupanje znači da budžet nije u potpunosti iskorišten.
+  </p>
+
+  <div class="summary">
     <article>
       <span>Planirano</span>
       <strong>{{ totalPlannedAmount | number: '1.2-2' }} KM</strong>
@@ -98,7 +94,7 @@
       <strong>{{ totalVariance | number: '1.2-2' }} KM</strong>
     </article>
     <article>
-      <span>Iskoristenost</span>
+      <span>Iskorištenost</span>
       <strong>{{ totalUtilization === null ? '-' : (totalUtilization | number: '1.1-1') + '%' }}</strong>
     </article>
   </div>
@@ -108,146 +104,144 @@
       <strong>Nema planiranih ili stvarnih troškova za odabrane filtere.</strong>
     </div>
   } @else {
-    <div class="chart-box" [class.pie-chart-box]="chartType === 'pie'">
-      @if (chartType === 'bar') {
-        <div class="planned-bars">
-          @for (row of rows; track row.groupName) {
-            <button
-              type="button"
-              class="planned-chart-row"
-              [class.selected-chart-row]="isGroupSelected(row.groupName)"
-              (click)="selectGroup(row)">
-              <strong>{{ row.groupName }}</strong>
-              <div class="planned-bar-line">
-                <span>Planirano</span>
-                <div class="chart-track"><div class="planned-fill" [style.width]="getBarWidth(row.plannedAmount)"></div></div>
-                <em>{{ row.plannedAmount | number: '1.2-2' }}</em>
-              </div>
-              <div class="planned-bar-line">
-                <span>Stvarno</span>
-                <div class="chart-track"><div class="actual-fill" [style.width]="getBarWidth(row.actualAmount)"></div></div>
-                <em>{{ row.actualAmount | number: '1.2-2' }}</em>
-              </div>
-            </button>
-            @if (isGroupSelected(row.groupName) && selectedGroupExpenses.length > 0) {
-              <section class="group-expense-details inline-expense-details" aria-label="Troškovi koji čine odabranu stvarnu sumu">
-                <div class="group-expense-heading">
-                  <div>
-                    <h3>{{ selectedGroupName }}</h3>
-                    <p>
-                      {{ selectedGroupExpenses.length }} troškova čini stvarnu sumu
-                      {{ row.actualAmount | number: '1.2-2' }} KM.
-                    </p>
+    @if (isChartVisible) {
+      <div class="chart-box" [class.pie-chart-box]="chartType === 'pie'">
+        @if (chartType === 'bar') {
+          <div class="planned-bars">
+            <div class="vertical-chart">
+              @for (row of rows; track row.groupName) {
+                <button
+                  type="button"
+                  class="vertical-chart-group"
+                  [class.selected-chart-row]="isGroupSelected(row.groupName)"
+                  (click)="selectGroup(row)">
+                  <div class="vertical-bars">
+                    <div class="vertical-bar-wrap">
+                      <em>{{ row.plannedAmount | number: '1.0-0' }}</em>
+                      <div class="planned-fill" [style.height]="getBarHeight(row.plannedAmount)"></div>
+                      <span class="bar-label">Plan</span>
+                    </div>
+                    <div class="vertical-bar-wrap">
+                      <em>{{ row.actualAmount | number: '1.0-0' }}</em>
+                      <div class="actual-fill" [style.height]="getBarHeight(row.actualAmount)"></div>
+                      <span class="bar-label">Stvarno</span>
+                    </div>
                   </div>
-                  <button type="button" class="secondary-action compact-action" (click)="clearSelectedGroup()">
-                    Sakrij troškove
-                  </button>
-                </div>
-
-                <div class="table-wrap group-expense-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Naziv</th>
-                        <th>Iznos</th>
-                        <th>Iznos KM</th>
-                        <th>Datum</th>
-                        <th>Kategorija</th>
-                        <th>Odjel</th>
-                        <th>Valuta</th>
-                        <th>Dobavljač</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (expense of selectedGroupExpenses; track expense.id) {
-                        <tr>
-                          <td>{{ expense.naziv }}</td>
-                          <td>{{ expense.iznos | number: '1.2-2' }}</td>
-                          <td>{{ getDisplayExpenseAmountInBam(expense) | number: '1.2-2' }}</td>
-                          <td>{{ expense.datum | date: 'dd.MM.yyyy' }}</td>
-                          <td>{{ expense.kategorijaNaziv || 'Bez kategorije' }}</td>
-                          <td>{{ expense.odjelNaziv || 'Bez odjela' }}</td>
-                          <td>{{ getExpenseCurrency(expense) }}</td>
-                          <td>{{ expense.dobavljacNaziv || '-' }}</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            }
-          }
-        </div>
-      } @else {
-        <svg class="pie-chart" viewBox="0 0 100 100" aria-label="Kružni grafikon stvarne potrošnje">
-          @for (segment of pieSegments; track segment.groupName) {
-            <path
-              class="pie-segment"
-              [class.pie-segment-selected]="isGroupSelected(segment.groupName)"
-              [attr.d]="segment.path"
-              [attr.fill]="segment.color"
-              (click)="selectGroup(segment)">
-              <title>{{ segment.groupName }}: {{ segment.actualAmount | number: '1.2-2' }} KM</title>
-            </path>
-          }
-        </svg>
-        <div class="pie-legend">
-          @for (segment of pieSegments; track segment.groupName) {
-            <button type="button" class="pie-legend-row" [class.selected-chart-row]="isGroupSelected(segment.groupName)" (click)="selectGroup(segment)">
-              <span class="legend-swatch" [style.background]="segment.color"></span>
-              {{ segment.groupName }}: {{ segment.actualAmount | number: '1.2-2' }} KM
-            </button>
-          }
-        </div>
-      }
-    </div>
-
-    @if (chartType === 'pie' && selectedGroupRow && selectedGroupExpenses.length > 0) {
-      <section class="group-expense-details" aria-label="Troškovi koji čine odabranu stvarnu sumu">
-        <div class="group-expense-heading">
-          <div>
-            <h3>{{ selectedGroupName }}</h3>
-            <p>
-              {{ selectedGroupExpenses.length }} troškova čini stvarnu sumu
-              {{ selectedGroupRow.actualAmount | number: '1.2-2' }} KM.
-            </p>
-          </div>
-          <button type="button" class="secondary-action compact-action" (click)="clearSelectedGroup()">
-            Sakrij troškove
-          </button>
-        </div>
-
-        <div class="table-wrap group-expense-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Naziv</th>
-                <th>Iznos</th>
-                <th>Iznos KM</th>
-                <th>Datum</th>
-                <th>Kategorija</th>
-                <th>Odjel</th>
-                <th>Valuta</th>
-                <th>Dobavljač</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (expense of selectedGroupExpenses; track expense.id) {
-                <tr>
-                  <td>{{ expense.naziv }}</td>
-                  <td>{{ expense.iznos | number: '1.2-2' }}</td>
-                  <td>{{ getDisplayExpenseAmountInBam(expense) | number: '1.2-2' }}</td>
-                  <td>{{ expense.datum | date: 'dd.MM.yyyy' }}</td>
-                  <td>{{ expense.kategorijaNaziv || 'Bez kategorije' }}</td>
-                  <td>{{ expense.odjelNaziv || 'Bez odjela' }}</td>
-                  <td>{{ getExpenseCurrency(expense) }}</td>
-                  <td>{{ expense.dobavljacNaziv || '-' }}</td>
-                </tr>
+                  <strong class="vertical-label">{{ row.groupName }}</strong>
+                  <span class="vertical-count">{{ getExpenseCountForGroup(row.groupName) }} troškova</span>
+                  <span class="vertical-status-pill" [class]="getStatusClass(row.status)">{{ row.status }}</span>
+                </button>
               }
-            </tbody>
-          </table>
-        </div>
-      </section>
+            </div>
+
+            <div class="vertical-chart-footer">
+              <div class="vertical-chart-legend">
+                <span><span class="legend-swatch" style="background:#1769ff"></span>Planirano</span>
+                <span><span class="legend-swatch" style="background:#12b76a"></span>Stvarno</span>
+              </div>
+              <span class="vertical-chart-total">
+                Ukupno stvarnih troškova: <strong>{{ totalActualAmount | number: '1.2-2' }} KM</strong>
+                &nbsp;|&nbsp; Ukupno planirano: <strong>{{ totalPlannedAmount | number: '1.2-2' }} KM</strong>
+              </span>
+            </div>
+
+            @for (row of rows; track row.groupName) {
+              @if (isGroupSelected(row.groupName) && selectedGroupExpenses.length > 0) {
+                <section class="group-expense-details inline-expense-details" aria-label="Troškovi koji čine odabranu stvarnu sumu">
+                  <div class="group-expense-heading">
+                    <div>
+                      <h3>{{ selectedGroupName }}</h3>
+                      <p>{{ selectedGroupExpenses.length }} troškova čini stvarnu sumu {{ row.actualAmount | number: '1.2-2' }} KM.</p>
+                    </div>
+                    <button type="button" class="secondary-action compact-action" (click)="clearSelectedGroup()">Sakrij troškove</button>
+                  </div>
+                  <div class="table-wrap group-expense-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Naziv</th><th>Iznos</th><th>Iznos KM</th><th>Datum</th>
+                          <th>Kategorija</th><th>Odjel</th><th>Valuta</th><th>Dobavljač</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (expense of selectedGroupExpenses; track expense.id) {
+                          <tr>
+                            <td>{{ expense.naziv }}</td>
+                            <td>{{ expense.iznos | number: '1.2-2' }}</td>
+                            <td>{{ getDisplayExpenseAmountInBam(expense) | number: '1.2-2' }}</td>
+                            <td>{{ expense.datum | date: 'dd.MM.yyyy' }}</td>
+                            <td>{{ expense.kategorijaNaziv || 'Bez kategorije' }}</td>
+                            <td>{{ expense.odjelNaziv || 'Bez odjela' }}</td>
+                            <td>{{ getExpenseCurrency(expense) }}</td>
+                            <td>{{ expense.dobavljacNaziv || '-' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              }
+            }
+          </div>
+        } @else {
+          <svg class="pie-chart" viewBox="0 0 100 100" aria-label="Kružni grafikon stvarne potrošnje">
+            @for (segment of pieSegments; track segment.groupName) {
+              <path
+                class="pie-segment"
+                [class.pie-segment-selected]="isGroupSelected(segment.groupName)"
+                [attr.d]="segment.path"
+                [attr.fill]="segment.color"
+                (click)="selectGroup(segment)">
+                <title>{{ segment.groupName }}: {{ segment.actualAmount | number: '1.2-2' }} KM</title>
+              </path>
+            }
+          </svg>
+          <div class="pie-legend">
+            @for (segment of pieSegments; track segment.groupName) {
+              <button type="button" class="pie-legend-row" [class.selected-chart-row]="isGroupSelected(segment.groupName)" (click)="selectGroup(segment)">
+                <span class="legend-swatch" [style.background]="segment.color"></span>
+                {{ segment.groupName }}: {{ segment.actualAmount | number: '1.2-2' }} KM
+              </button>
+            }
+          </div>
+        }
+      </div>
+
+      @if (chartType === 'pie' && selectedGroupRow && selectedGroupExpenses.length > 0) {
+        <section class="group-expense-details" aria-label="Troškovi koji čine odabranu stvarnu sumu">
+          <div class="group-expense-heading">
+            <div>
+              <h3>{{ selectedGroupName }}</h3>
+              <p>{{ selectedGroupExpenses.length }} troškova čini stvarnu sumu {{ selectedGroupRow.actualAmount | number: '1.2-2' }} KM.</p>
+            </div>
+            <button type="button" class="secondary-action compact-action" (click)="clearSelectedGroup()">Sakrij troškove</button>
+          </div>
+          <div class="table-wrap group-expense-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Naziv</th><th>Iznos</th><th>Iznos KM</th><th>Datum</th>
+                  <th>Kategorija</th><th>Odjel</th><th>Valuta</th><th>Dobavljač</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (expense of selectedGroupExpenses; track expense.id) {
+                  <tr>
+                    <td>{{ expense.naziv }}</td>
+                    <td>{{ expense.iznos | number: '1.2-2' }}</td>
+                    <td>{{ getDisplayExpenseAmountInBam(expense) | number: '1.2-2' }}</td>
+                    <td>{{ expense.datum | date: 'dd.MM.yyyy' }}</td>
+                    <td>{{ expense.kategorijaNaziv || 'Bez kategorije' }}</td>
+                    <td>{{ expense.odjelNaziv || 'Bez odjela' }}</td>
+                    <td>{{ getExpenseCurrency(expense) }}</td>
+                    <td>{{ expense.dobavljacNaziv || '-' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
     }
 
     <div class="table-wrap">
@@ -258,7 +252,7 @@
             <th>Planirano KM</th>
             <th>Stvarno KM</th>
             <th>Odstupanje KM</th>
-            <th>Iskoristenost</th>
+            <th>Iskorištenost</th>
             <th>Status</th>
           </tr>
         </thead>

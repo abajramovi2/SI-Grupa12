@@ -9,12 +9,19 @@
 }
 
 .panel-heading,
-.actions,
 .date-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
   gap: 12px;
 }
 
@@ -25,7 +32,6 @@ h2 {
 }
 
 .comparison-note,
-.actions,
 label {
   color: #667085;
   font-size: 13px;
@@ -40,6 +46,7 @@ label {
   background: #ffffff;
   font-size: 13px;
   font-weight: 900;
+  cursor: pointer;
 }
 
 .secondary-action:disabled {
@@ -91,13 +98,14 @@ label {
   color: #344054;
   font-size: 13px;
 }
+
 .comparison-legend {
-  margin: 18px 0 20px 0;
-  font-size: 15px;
+  margin: 0;
+  font-size: 13px;
   line-height: 1.5;
   color: #64748b;
-  max-width: 1100px;
 }
+
 .option {
   display: inline-flex;
   align-items: center;
@@ -119,6 +127,7 @@ label {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-left: auto;
 }
 
 .chart-type-button {
@@ -141,7 +150,7 @@ label {
 
 .summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(140px, 1fr));
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
   gap: 12px;
 }
 
@@ -164,70 +173,104 @@ label {
 }
 
 .chart-box {
-  min-height: 220px;
-  padding: 14px;
+  padding: 20px;
   border: 1px solid #e6ebf2;
   border-radius: 8px;
   background: #ffffff;
 }
+
+/* ── Vertikalni bar chart ── */
 
 .planned-bars {
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
-.planned-chart-row {
-  display: grid;
-  gap: 7px;
-  width: 100%;
+.vertical-chart {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  overflow-x: auto;
+  padding: 16px 4px 4px;
+  min-height: 350px;
+}
+
+.vertical-chart-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 100px;
+  min-width: 90px;
+  max-width: 160px;
   border: 1px solid #e6ebf2;
-  border-radius: 8px;
-  padding: 10px;
-  background: #ffffff;
-  text-align: left;
+  border-radius: 10px;
+  padding: 12px 10px 10px;
+  background: #f8fafc;
   cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
 
-.planned-chart-row strong {
-  color: #344054;
-  font-size: 13px;
-}
-
-.planned-chart-row:hover,
-.planned-chart-row:focus-visible,
-.selected-chart-row {
+.vertical-chart-group:hover,
+.vertical-chart-group:focus-visible {
   border-color: #1769ff;
+  background: #f0f5ff;
   outline: none;
   box-shadow: 0 0 0 3px rgba(23, 105, 255, 0.1);
 }
 
-.planned-bar-line {
-  display: grid;
-  grid-template-columns: 76px 1fr 90px;
-  align-items: center;
-  gap: 10px;
+.vertical-chart-group.selected-chart-row {
+  border-color: #1769ff;
+  background: #eef4ff;
+  box-shadow: 0 0 0 3px rgba(23, 105, 255, 0.12);
+}
+
+.vertical-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 250px;
+  width: 100%;
+  justify-content: center;
+}
+.vertical-count {
+  font-size: 10px;
   color: #667085;
-  font-size: 12px;
+  text-align: center;
 }
-
-.planned-bar-line em {
-  color: #344054;
-  font-style: normal;
-  text-align: right;
-}
-
-.chart-track {
-  height: 10px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #edf1f7;
-}
-
-.planned-fill,
-.actual-fill {
+.vertical-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   height: 100%;
-  min-width: 4px;
-  border-radius: inherit;
+}
+
+.vertical-bar-wrap em {
+  font-size: 10px;
+  font-style: normal;
+  color: #344054;
+  font-weight: 600;
+  text-align: center;
+  max-width: 44px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-label {
+  font-size: 10px;
+  color: #667085;
+  margin-top: 2px;
+}
+
+.vertical-bars .planned-fill,
+.vertical-bars .actual-fill {
+  width: 28px;
+  border-radius: 5px 5px 0 0;
+  transition: height 0.35s ease;
+  min-height: 4px;
 }
 
 .planned-fill {
@@ -238,17 +281,72 @@ label {
   background: #12b76a;
 }
 
+.vertical-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #344054;
+  text-align: center;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.vertical-status-pill {
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #f2f4f7;
+  color: #344054;
+}
+
+.vertical-chart-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid #edf1f7;
+}
+
+.vertical-chart-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #667085;
+  align-items: center;
+}
+
+.vertical-chart-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vertical-chart-total {
+  font-size: 12px;
+  color: #667085;
+}
+
+.vertical-chart-total strong {
+  color: #101828;
+  font-size: 13px;
+}
+
+/* ── Pie chart ── */
+
 .pie-chart-box {
   display: grid;
   grid-template-columns: minmax(160px, 220px) 1fr;
   align-items: center;
   gap: 18px;
+  min-height: 240px;
 }
 
 .pie-chart {
-  width: 100%;
-  max-width: 220px;
-  aspect-ratio: 1;
+  width: 220px;
+  height: 220px;
+  flex-shrink: 0;
 }
 
 .pie-legend {
@@ -298,6 +396,8 @@ label {
   border-radius: 3px;
 }
 
+/* ── Detalji troškova ── */
+
 .group-expense-details {
   display: grid;
   gap: 12px;
@@ -329,6 +429,8 @@ label {
 .group-expense-table table {
   min-width: 860px;
 }
+
+/* ── Tabela ── */
 
 .over-budget td,
 .over-budget {
@@ -405,20 +507,33 @@ th {
   font-weight: 900;
 }
 
+/* ── Responzivnost ── */
+
 @media (max-width: 760px) {
   .summary {
-    grid-template-columns: 1fr;
-  }
-
-  .planned-bar-line {
-    grid-template-columns: 1fr;
-  }
-
-  .planned-bar-line em {
-    text-align: left;
+    grid-template-columns: 1fr 1fr;
   }
 
   .pie-chart-box {
     grid-template-columns: 1fr;
+  }
+
+  .vertical-chart {
+    gap: 4px;
+    min-height: 200px;
+  }
+
+  .vertical-chart-group {
+    min-width: 64px;
+    padding: 8px 4px 8px;
+  }
+
+  .vertical-bars {
+    height: 140px;
+  }
+
+  .vertical-chart-footer {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
