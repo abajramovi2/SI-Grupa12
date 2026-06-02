@@ -2,7 +2,7 @@
 
 ## Šta je išlo dobro
 
-- **Povećanje obima i brzine rada (Velocity)**: U skladu sa povratnom informacijom Product Ownera iz Sprinta 9, tim je drastično povećao obim rada u ovom sprintu. Uspješno je zatvoreno čak 14 korisničkih priča, uključujući 9 novoplaniranih i 3 preostale.
+- **Povećanje obima i brzine rada (Velocity)**: U skladu sa povratnom informacijom Product Ownera iz Sprinta 9, tim je drastično povećao obim rada u ovom sprintu. Uspješno je zatvoreno čak 17 korisničkih priča, uključujući 9 novoplaniranih i 3 preostale.
 - **Izuzetna pokrivenost testovima**: Kod coverage za sve nove i izmijenjene backend servise i rute iznosi preko 97%, sa ukupno 446 potpuno zelenih testnih scenarija raspoređenih u 24 testna fajla, što ulijeva veliku sigurnost u stabilnost aplikacije.
 - **Odlična integracija AI asistenta i naprednih analiza**: AI asistent na bosanskom jeziku, AI Executive Summary i procjena rizika dobavljača su besprijekorno integrisani i vizuelno se uklapaju u novu centralnu Dashboard stranicu.
 - **Pravovremena i česta integracija**: Implementirali smo preporuku iz prethodne retrospektive o pravovremenoj isporuci, čime smo spriječili "merge conflict" situacije pred sami kraj sprinta.
