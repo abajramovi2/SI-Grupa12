@@ -19,5 +19,87 @@
         <p>{{ result.message }}</p>
       </div>
     }
+
+    @if (isAdminPanel) {
+      <section class="user-management">
+        <div class="section-heading">
+          <div>
+            <span>Upravljanje ulogama</span>
+            <h2>Korisnici sistema</h2>
+          </div>
+        </div>
+
+        @if (isUsersLoading) {
+          <p class="status">Učitavanje korisnika...</p>
+        }
+
+        @if (usersError) {
+          <p class="inline-alert error">{{ usersError }}</p>
+        }
+
+        @if (usersMessage) {
+          <p class="inline-alert success">{{ usersMessage }}</p>
+        }
+
+        @if (!isUsersLoading && korisnici.length > 0) {
+          <div class="users-table-wrap">
+            <table class="users-table">
+              <thead>
+                <tr>
+                  <th>Korisnik</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                  <th>Uloga</th>
+                  <th>Akcija</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (korisnik of korisnici; track korisnik.id) {
+                  <tr>
+                    <td>
+                      <strong>{{ korisnik.ime }} {{ korisnik.prezime }}</strong>
+                    </td>
+                    <td>{{ korisnik.email }}</td>
+                    <td>
+                      <span class="status-badge">{{ korisnik.statusNaloga }}</span>
+                    </td>
+                    <td>
+                      <select
+                        class="role-select"
+                        [value]="selectedRoles[korisnik.id]"
+                        (change)="onRoleSelection(korisnik.id, $event)"
+                        [disabled]="savingUsers[korisnik.id]"
+                      >
+                        @for (uloga of uloge; track uloga.id) {
+                          <option [value]="uloga.id">{{ uloga.naziv }}</option>
+                        }
+                      </select>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        class="save-button"
+                        (click)="saveUserRole(korisnik)"
+                        [disabled]="savingUsers[korisnik.id] || !hasRoleChanged(korisnik)"
+                      >
+                        @if (savingUsers[korisnik.id]) {
+                          Snima se...
+                        } @else {
+                          Snimi
+                        }
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        @if (!isUsersLoading && !usersError && korisnici.length === 0) {
+          <p class="empty-state">Nema evidentiranih korisnika.</p>
+        }
+      </section>
+    }
   </div>
 </section>
