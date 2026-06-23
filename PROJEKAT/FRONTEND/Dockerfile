@@ -16,6 +16,5 @@ RUN npm install -g http-server
 # Railway dynamically assigns PORT via env variable
 EXPOSE ${PORT:-4200}
 
-# Serve the 'browser' folder - use Railway's PORT env var, fallback to 4200
-# -a 0.0.0.0 binds to all interfaces (Railway requires this)
-CMD ["sh", "-c", "http-server dist/TIM12Frontend/browser -p ${PORT:-4200} -a 0.0.0.0"]
+# Generate public runtime configuration from Railway variables, then serve the app.
+CMD ["sh", "-c", "printf 'window.__TIM12_CONFIG__ = { apiUrl: \"%s\", keycloakUrl: \"%s\" };\\n' \"${API_URL:-https://backend-production-5561.up.railway.app/api}\" \"${KEYCLOAK_URL:-}\" > dist/TIM12Frontend/browser/runtime-config.js && exec http-server dist/TIM12Frontend/browser -p ${PORT:-4200} -a 0.0.0.0"]

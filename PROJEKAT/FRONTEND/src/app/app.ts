@@ -85,7 +85,11 @@ export class App implements OnInit, OnDestroy {
 
   public async signIn(): Promise<void> {
     this.navMessage = '';
-    await this.authService.loginWithKeycloak();
+    try {
+      await this.authService.loginWithKeycloak();
+    } catch (error) {
+      this.navMessage = error instanceof Error ? error.message : 'Keycloak prijava nije dostupna.';
+    }
   }
 
   public async signOut(): Promise<void> {

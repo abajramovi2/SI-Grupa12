@@ -79,6 +79,10 @@ export class AuthGuardService {
   }
 
   public async loginWithKeycloak(): Promise<void> {
+    if (!environment.keycloakUrl) {
+      throw new Error('KEYCLOAK_URL nije konfigurisan na frontend Railway servisu.');
+    }
+
     if (this.shouldUseCanonicalLocalhost()) {
       window.location.replace(
         `http://localhost:4200${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -218,6 +222,10 @@ export class AuthGuardService {
   }
 
   public getKeycloakLogoutUrl(): string {
+    if (!environment.keycloakUrl) {
+      return `${window.location.origin}/`;
+    }
+
     const redirectUri = this.getRedirectUri();
     const logoutQuery = new URLSearchParams({
       client_id: this.clientId,

@@ -19,6 +19,7 @@ const { registerNotificationEndpoints } = require("./PRESENTATION API/Endpoints/
 const { registerAIAnalysisEndpoints } = require("./PRESENTATION API/Endpoints/AIAnalysisEndpoints");
 const { registerCommentEndpoints } = require("./PRESENTATION API/Endpoints/CommentEndpoints");
 const { resolveKeycloakConfig } = require("./BLL/Config/KeycloakConfig");
+const { resolveDatabaseSsl } = require("./BLL/Config/DatabaseConfig");
 
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -31,10 +32,9 @@ const FRONTEND_ORIGINS = new Set(
     .map((origin: string) => origin.trim().replace(/\/+$/, ""))
     .filter(Boolean)
 );
-const IS_PROD = process.env.NODE_ENV === "production";
 const dbClientConfig = () => ({
   connectionString: process.env.DATABASE_URL,
-  ssl: IS_PROD ? { rejectUnauthorized: false } : false,
+  ssl: resolveDatabaseSsl(process.env.DATABASE_URL),
 });
 
 
@@ -54,7 +54,7 @@ const writeLog = (level: string, message: string, error?: unknown) => {
 };
 
 async function ensureDockerServices() {
-  if (IS_PROD || process.env.USE_DOCKER_DB !== "true") {
+  if (process.env.NODE_ENV === "production" || process.env.USE_DOCKER_DB !== "true") {
     return;
   }
 
@@ -323,8 +323,8 @@ function startServer() {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        secure: IS_PROD,
-        sameSite: IS_PROD ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
         maxAge: 60 * 60 * 1000,
       },
     })

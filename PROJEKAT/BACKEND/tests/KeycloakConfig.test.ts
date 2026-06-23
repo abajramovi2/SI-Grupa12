@@ -3,17 +3,17 @@ import { resolveKeycloakConfig } from "../BLL/Config/KeycloakConfig";
 describe("resolveKeycloakConfig", () => {
   test("izvodi issuer i JWKS adresu iz jednog Keycloak URL-a", () => {
     const config = resolveKeycloakConfig({
-      KEYCLOAK_URL: "https://si-grupa12-production.up.railway.app/",
+      KEYCLOAK_URL: "https://keycloak.example.com/",
       KEYCLOAK_REALM: "Grupa12SI",
       KEYCLOAK_CLIENT_ID: "public",
     });
 
-    expect(config.keycloakUrl).toBe("https://si-grupa12-production.up.railway.app");
+    expect(config.keycloakUrl).toBe("https://keycloak.example.com");
     expect(config.jwtIssuer).toBe(
-      "https://si-grupa12-production.up.railway.app/realms/Grupa12SI"
+      "https://keycloak.example.com/realms/Grupa12SI"
     );
     expect(config.jwksUri).toBe(
-      "https://si-grupa12-production.up.railway.app/realms/Grupa12SI/protocol/openid-connect/certs"
+      "https://keycloak.example.com/realms/Grupa12SI/protocol/openid-connect/certs"
     );
   });
 

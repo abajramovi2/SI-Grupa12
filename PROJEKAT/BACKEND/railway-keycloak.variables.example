@@ -1,0 +1,12 @@
+KC_BOOTSTRAP_ADMIN_USERNAME=admin
+KC_BOOTSTRAP_ADMIN_PASSWORD=replace-with-a-strong-password
+
+KC_DB=postgres
+KC_DB_URL=jdbc:postgresql://${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}
+KC_DB_USERNAME=${{Postgres.PGUSER}}
+KC_DB_PASSWORD=${{Postgres.PGPASSWORD}}
+
+KC_HEALTH_ENABLED=true
+KC_HTTP_ENABLED=true
+KC_PROXY_HEADERS=xforwarded
+KC_HOSTNAME_STRICT=false

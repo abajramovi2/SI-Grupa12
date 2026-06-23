@@ -28,7 +28,11 @@ export class Homepage {
     this.infoMessage = '';
     this.loadingMessage = '';
 
-    await this.authGuardService.loginWithKeycloak();
+    try {
+      await this.authGuardService.loginWithKeycloak();
+    } catch (error) {
+      this.errorMessage = error instanceof Error ? error.message : 'Keycloak prijava nije dostupna.';
+    }
   }
 
   public async logoutFromBackend(): Promise<void> {

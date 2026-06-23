@@ -44,4 +44,20 @@ describe("AppDB module behavior", () => {
     pg.Pool = originalPool;
     delete process.env.NODE_ENV;
   });
+
+  test("ne forsira ssl za Railway privatnu mrezu", () => {
+    process.env.DATABASE_URL = "postgresql://user:pass@postgres.railway.internal:5432/railway";
+    process.env.NODE_ENV = "production";
+    jest.resetModules();
+    const pg = require("pg");
+    const originalPool = pg.Pool;
+    const mockPool = jest.fn().mockImplementation((opts: any) => ({ query: jest.fn(), _opts: opts }));
+    pg.Pool = mockPool as any;
+    const AppDB = require("../DAL/ApDbContext/AppDB");
+    void AppDB.db;
+    const calledWith = mockPool.mock.calls[0][0];
+    expect(calledWith.ssl).toBe(false);
+    pg.Pool = originalPool;
+    delete process.env.NODE_ENV;
+  });
 });

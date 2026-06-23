@@ -1,0 +1,20 @@
+NODE_ENV=production
+
+# Reference the PostgreSQL service instead of storing its resolved password.
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+USE_DOCKER_DB=false
+
+SESSION_SECRET=replace-with-a-long-random-secret
+FRONTEND_ORIGINS=https://frontend-production-16f75.up.railway.app
+AI_SERVICE_URL=https://ai-service-production-e732.up.railway.app
+
+KEYCLOAK_URL=https://REPLACE-WITH-KEYCLOAK-DOMAIN
+KEYCLOAK_REALM=Grupa12SI
+KEYCLOAK_CLIENT_ID=public
+KEYCLOAK_CLIENT_SECRET=
+JWT_AUDIENCE=account
+
+# Leave JWT_ISSUER and JWKS_URI unset. They are derived from KEYCLOAK_URL.
+
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash

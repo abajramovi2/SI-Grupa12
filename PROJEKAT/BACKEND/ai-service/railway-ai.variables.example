@@ -1,0 +1,6 @@
+NODE_ENV=production
+
+# Reference the PostgreSQL service instead of storing its resolved password.
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+
+# Railway injects PORT automatically. The Dockerfile uses it at runtime.
