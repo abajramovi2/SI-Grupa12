@@ -5,7 +5,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Adna123!
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: grupa12app
     ports:
       - "5433:5432"
@@ -43,7 +43,8 @@ services:
       keycloak:
         condition: service_started
     environment:
-      DATABASE_URL: postgresql://postgres:Adna123!@postgres:5432/grupa12app
+      TZ: Europe/Sarajevo
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/grupa12app
       USE_DOCKER_DB: "false"
       NODE_ENV: development
       PORT: 3000
@@ -55,8 +56,32 @@ services:
       JWKS_URI: http://keycloak:8080/realms/Grupa12SI/protocol/openid-connect/certs
       SESSION_SECRET: stavi_ovdje_jaku_tajnu_za_session
       FRONTEND_ORIGIN: http://localhost:4200
+      AI_SERVICE_URL: http://ai-service:8000
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL}
     ports:
       - "3000:3000"
+    restart: "no"
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: grupa12_ai
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/grupa12app
+      AI_SERVICE_PORT: 8000
+      NODE_ENV: development
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: "no"
 volumes:
   postgres_data:

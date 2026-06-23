@@ -5,8 +5,17 @@ import { Router } from '@angular/router';
 import { ActivatedRoute } from '@angular/router';
 import { AuthGuardService } from '../../../middleware/middleware.authguard';
 import { environment } from '../../../environments/environment';
-import { CreateExpenseRequest, Expense, ExpenseReferenceData } from '../../../models/entities';
+import { CreateExpenseRequest, Expense, ExpenseReferenceData, ExpenseReportSummary } from '../../../models/entities';
+import {
+  AiAnalysisService,
+  CostSuggestionsResponse,
+  ExecutiveSummaryResponse,
+  MissingRecurringExpensesResponse,
+  SupplierRiskResponse,
+  TopGrowingSupplier,
+} from '../../../services/ai-analysis.service';
 import { ExpenseService } from '../../../services/expense.service';
+import { ReportService } from '../../../services/report.service';
 
 type ExpenseBreakdown = {
   label: string;
@@ -26,6 +35,8 @@ export class HomeComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly authService = inject(AuthGuardService);
   private readonly expenseService = inject(ExpenseService);
+  private readonly reportService = inject(ReportService);
+  private readonly aiAnalysisService = inject(AiAnalysisService);
   private readonly fb = inject(FormBuilder);
   private readonly cdr = inject(ChangeDetectorRef);
 
@@ -48,13 +59,50 @@ export class HomeComponent implements OnInit {
   public isSavingExpense = false;
   public dashboardMessage = '';
   public dashboardError = '';
+  public budgetSummary: ExpenseReportSummary | null = null;
+  public isLoadingBudgetSummary = false;
+  public budgetSummaryError = '';
   public editingExpense: Expense | null = null;
   public expenseToDelete: Expense | null = null;
+  public assistantQuestion = '';
+  public assistantAnswer = '';
+  public assistantSource: 'gemini' | 'fallback' | '' = '';
+  public isAssistantLoading = false;
+  public assistantError = '';
+  public suggestedQuestions = [
+    'Koji trošak je najveći?',
+    'Kojih je 5 najvećih troškova?',
+    'Koja kategorija najviše troši?',
+    'Kome smo najviše platili?',
+    'Koliko je ostalo budžeta?',
+    'Koja je najveća anomalija?',
+    'Da li troškovi rastu ili padaju?',
+    'Koji dobavljač ima najveći rast?',
+  ];
+  public showAllSuggestedQuestions = false;
+  public topGrowingSuppliers: TopGrowingSupplier[] = [];
+  public isLoadingSuppliers = false;
+  public suppliersError = '';
+  public executiveSummary: ExecutiveSummaryResponse['summary'] = [];
+  public isLoadingExecutiveSummary = false;
+  public executiveSummaryError = '';
+  public costSuggestions: CostSuggestionsResponse['suggestions'] = [];
+  public isLoadingCostSuggestions = false;
+  public costSuggestionsError = '';
+  public missingRecurringExpenses: MissingRecurringExpensesResponse['missingRecurringExpenses'] = [];
+  public isLoadingMissingRecurring = false;
+  public missingRecurringError = '';
+  public supplierRisks: SupplierRiskResponse['risks'] = [];
+  public isLoadingSupplierRisks = false;
+  public supplierRisksError = '';
+  public anomalyExplanationById: Record<string, string> = {};
+  public anomalyExplanationSeverityById: Record<string, string> = {};
+  public loadingAnomalyExplanationId: string | number | null = null;
 
   public editForm = this.fb.group({
     naziv: ['', [Validators.required, Validators.maxLength(200)]],
     iznos: [null as number | null, [Validators.required, Validators.min(0.01)]],
-    datum: ['', [Validators.required, Validators.pattern(/^\d{1,2}\.\d{1,2}\.\d{4}\.?$/)]],
+    datum: ['', [Validators.required, Validators.pattern(/^\d{2}\.\d{2}\.\d{4}\.?$/)]],
     opis: [''],
     kategorijaId: ['', Validators.required],
     odjelId: ['', Validators.required],
@@ -67,10 +115,26 @@ export class HomeComponent implements OnInit {
     this.authService.authState$.subscribe((isAuthenticated) => {
       if (isAuthenticated) {
         this.loadDashboardExpenses();
+        if (this.canOpenReports) {
+          this.loadBudgetSummary();
+        }
+        if (this.canOpenAiAnalysis) {
+          this.loadTopGrowingSuppliers();
+          this.loadExecutiveSummary();
+          this.loadCostSuggestions();
+          this.loadMissingRecurringExpenses();
+          this.loadSupplierRisks();
+        }
         return;
       }
 
       this.expenses = [];
+      this.budgetSummary = null;
+      this.topGrowingSuppliers = [];
+      this.executiveSummary = [];
+      this.costSuggestions = [];
+      this.missingRecurringExpenses = [];
+      this.supplierRisks = [];
       this.isLoadingExpenses = false;
       this.cdr.detectChanges();
     });
@@ -78,7 +142,7 @@ export class HomeComponent implements OnInit {
     this.loadReferenceData();
 
     if (this.route.snapshot.queryParamMap.get('accessDenied') === 'troskovi') {
-      this.accessNotice = 'Pristup formi za unos troskova je dozvoljen samo ulogama admin i administrativni_radnik.';
+      this.accessNotice = 'Pristup formi za unos troškova je dozvoljen samo ulogama admin i administrativni_radnik.';
     }
 
     if (this.route.snapshot.queryParamMap.get('accessDenied') === 'pregled-podataka') {
@@ -86,7 +150,7 @@ export class HomeComponent implements OnInit {
     }
 
     if (this.route.snapshot.queryParamMap.get('accessDenied') === 'izvjestaji') {
-      this.accessNotice = 'Pristup izvjestajima je dozvoljen samo ulogama admin, glavni_racunovodja i finansijski_direktor.';
+      this.accessNotice = 'Pristup izvještajima je dozvoljen samo ulogama admin, glavni_racunovodja i finansijski_direktor.';
     }
   }
 
@@ -105,8 +169,16 @@ export class HomeComponent implements OnInit {
     return this.authService.hasAnyRole(this.reportRoles);
   }
 
+  public get canOpenAiAnalysis(): boolean {
+    return this.authService.hasAnyRole(this.reportRoles);
+  }
+
   public get isAdmin(): boolean {
     return this.authService.hasAnyRole(['admin']);
+  }
+
+  public get visibleSuggestedQuestions(): string[] {
+    return this.showAllSuggestedQuestions ? this.suggestedQuestions : this.suggestedQuestions.slice(0, 4);
   }
 
   public get totalAmount(): number {
@@ -137,6 +209,48 @@ export class HomeComponent implements OnInit {
     return this.departmentBreakdown[0]?.label || '-';
   }
 
+  public get budgetRemainingAmount(): number {
+    return Number(this.budgetSummary?.budgetTotal || 0) - Number(this.budgetSummary?.totalAmount || 0);
+  }
+
+  public get budgetUtilizationPercentage(): number | null {
+    return this.budgetSummary?.budgetUtilizationPercent ?? null;
+  }
+
+  public get budgetProgressPercentage(): number {
+    return Math.min(Math.max(this.budgetUtilizationPercentage || 0, 0), 100);
+  }
+
+  public get budgetStatusLabel(): string {
+    const utilization = this.budgetUtilizationPercentage;
+    if (utilization === null) {
+      return 'Budzet nije definisan';
+    }
+
+    if (utilization > 100) {
+      return 'Budzet je prekoracen';
+    }
+
+    if (utilization >= 90) {
+      return 'Blizu limita';
+    }
+
+    return 'U granicama budzeta';
+  }
+
+  public get budgetStatusClass(): string {
+    const utilization = this.budgetUtilizationPercentage;
+    if (utilization === null) {
+      return 'neutral';
+    }
+
+    if (utilization > 100) {
+      return 'critical';
+    }
+
+    return utilization >= 90 ? 'warning' : 'healthy';
+  }
+
   public loadDashboardExpenses(): void {
     this.isLoadingExpenses = true;
     this.dashboardError = '';
@@ -149,8 +263,28 @@ export class HomeComponent implements OnInit {
       },
       error: (error) => {
         console.error(error);
-        this.dashboardError = 'Greska pri dohvatu troskova.';
+        this.dashboardError = 'Greška pri dohvatu troškova.';
         this.isLoadingExpenses = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  public loadBudgetSummary(): void {
+    this.isLoadingBudgetSummary = true;
+    this.budgetSummaryError = '';
+
+    this.reportService.getExpenseReport({ tipIzvjestaja: 'sazeti' }).subscribe({
+      next: (report) => {
+        this.budgetSummary = report.summary;
+        this.isLoadingBudgetSummary = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error(error);
+        this.budgetSummary = null;
+        this.budgetSummaryError = 'Greska pri dohvatu pregleda budzeta.';
+        this.isLoadingBudgetSummary = false;
         this.cdr.detectChanges();
       },
     });
@@ -164,7 +298,160 @@ export class HomeComponent implements OnInit {
       },
       error: (error) => {
         console.error(error);
-        this.dashboardError = 'Greska pri dohvatu podataka za uredjivanje troskova.';
+        this.dashboardError = 'Greška pri dohvatu podataka za uređivanje troškova.';
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  public askAssistant(): void {
+    if (!this.canOpenAiAnalysis) {
+      this.assistantError = 'AI analiza je dostupna samo ovlaštenim finansijskim ulogama.';
+      return;
+    }
+
+    const question = this.assistantQuestion.trim();
+    this.assistantError = '';
+    this.assistantAnswer = '';
+    this.assistantSource = '';
+
+    if (!question) {
+      this.assistantError = 'Unesite pitanje za AI asistenta.';
+      return;
+    }
+
+    this.isAssistantLoading = true;
+    this.aiAnalysisService.askAssistant(question).subscribe({
+      next: (response) => {
+        this.assistantAnswer = response.answer;
+        this.assistantSource = response.source || '';
+        this.isAssistantLoading = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error(error);
+        this.assistantError = error?.error?.message || 'Greška pri komunikaciji sa AI asistentom.';
+        this.isAssistantLoading = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  public askSuggestedQuestion(question: string): void {
+    this.assistantQuestion = question;
+    this.askAssistant();
+  }
+
+  public loadTopGrowingSuppliers(): void {
+    this.isLoadingSuppliers = true;
+    this.suppliersError = '';
+
+    this.aiAnalysisService.getTopGrowingSuppliers().subscribe({
+      next: (response) => {
+        this.topGrowingSuppliers = response.suppliers || [];
+        this.isLoadingSuppliers = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error(error);
+        this.suppliersError = 'Greška pri dohvatu dobavljača.';
+        this.isLoadingSuppliers = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  public loadExecutiveSummary(): void {
+    this.isLoadingExecutiveSummary = true;
+    this.executiveSummaryError = '';
+
+    this.aiAnalysisService.getExecutiveSummary().subscribe({
+      next: (response) => {
+        this.executiveSummary = response.summary || [];
+        this.isLoadingExecutiveSummary = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error(error);
+        this.executiveSummaryError = 'Greška pri dohvatu AI sažetka.';
+        this.isLoadingExecutiveSummary = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  public loadCostSuggestions(): void {
+    this.isLoadingCostSuggestions = true;
+    this.costSuggestionsError = '';
+
+    this.aiAnalysisService.getCostSuggestions().subscribe({
+      next: (response) => {
+        this.costSuggestions = response.suggestions || [];
+        this.isLoadingCostSuggestions = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error(error);
+        this.costSuggestionsError = 'Greška pri dohvatu AI preporuka.';
+        this.isLoadingCostSuggestions = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  public loadMissingRecurringExpenses(): void {
+    this.isLoadingMissingRecurring = true;
+    this.missingRecurringError = '';
+
+    this.aiAnalysisService.getMissingRecurringExpenses().subscribe({
+      next: (response) => {
+        this.missingRecurringExpenses = response.missingRecurringExpenses || [];
+        this.isLoadingMissingRecurring = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error(error);
+        this.missingRecurringError = 'Greška pri dohvatu zaboravljenih troškova.';
+        this.isLoadingMissingRecurring = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  public loadSupplierRisks(): void {
+    this.isLoadingSupplierRisks = true;
+    this.supplierRisksError = '';
+
+    this.aiAnalysisService.getSupplierRisk().subscribe({
+      next: (response) => {
+        this.supplierRisks = response.risks || [];
+        this.isLoadingSupplierRisks = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error(error);
+        this.supplierRisksError = 'Greška pri dohvatu rizika dobavljača.';
+        this.isLoadingSupplierRisks = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  public explainAnomaly(expense: Expense): void {
+    this.loadingAnomalyExplanationId = expense.id;
+
+    this.aiAnalysisService.explainAnomaly(expense.id).subscribe({
+      next: (response) => {
+        const key = expense.id.toString();
+        this.anomalyExplanationById[key] = response.explanation;
+        this.anomalyExplanationSeverityById[key] = response.severity;
+        this.loadingAnomalyExplanationId = null;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error(error);
+        this.anomalyExplanationById[expense.id.toString()] = 'Greška pri dohvatu objašnjenja anomalije.';
+        this.loadingAnomalyExplanationId = null;
         this.cdr.detectChanges();
       },
     });
@@ -224,14 +511,14 @@ export class HomeComponent implements OnInit {
         this.expenses = this.expenses.map((expense) =>
           expense.id === updatedExpense.id ? updatedExpense : expense
         );
-        this.dashboardMessage = 'Trosak je uspjesno azuriran.';
+        this.dashboardMessage = 'Trošak je uspješno ažuriran.';
         this.isSavingExpense = false;
         this.closeEditExpense();
         this.cdr.detectChanges();
       },
       error: (error) => {
         console.error(error);
-        this.dashboardError = error?.error?.message || 'Greska pri azuriranju troska.';
+        this.dashboardError = error?.error?.message || 'Greška pri ažuriranju troška.';
         this.isSavingExpense = false;
         this.cdr.detectChanges();
       },
@@ -255,13 +542,13 @@ export class HomeComponent implements OnInit {
     this.expenseService.deleteExpense(deleteId).subscribe({
       next: () => {
         this.expenses = this.expenses.filter((expense) => expense.id.toString() !== deleteId);
-        this.dashboardMessage = 'Trosak je uspjesno obrisan.';
+        this.dashboardMessage = 'Trošak je uspješno obrisan.';
         this.closeDeleteExpense();
         this.cdr.detectChanges();
       },
       error: (error) => {
         console.error(error);
-        this.dashboardError = error?.error?.message || 'Greska pri brisanju troska.';
+        this.dashboardError = error?.error?.message || 'Greška pri brisanju troška.';
         this.closeDeleteExpense();
         this.cdr.detectChanges();
       },
@@ -287,7 +574,7 @@ export class HomeComponent implements OnInit {
 
   public idiNaTroskove(): void {
     if (!this.canOpenExpenses) {
-      this.accessNotice = 'Pristup formi za unos troskova je dozvoljen samo ulogama admin i administrativni_radnik.';
+      this.accessNotice = 'Pristup formi za unos troškova je dozvoljen samo ulogama admin i administrativni_radnik.';
       return;
     }
 
@@ -296,7 +583,7 @@ export class HomeComponent implements OnInit {
 
   public idiNaImportTroskova(): void {
     if (!this.canOpenExpenses) {
-      this.accessNotice = 'Pristup importu troskova je dozvoljen samo ulogama admin i administrativni_radnik.';
+      this.accessNotice = 'Pristup importu troškova je dozvoljen samo ulogama admin i administrativni_radnik.';
       return;
     }
 
@@ -304,7 +591,7 @@ export class HomeComponent implements OnInit {
   }
   public idiNaBudzetiranje(): void {
   if (!this.canOpenBudgets) {
-    this.accessNotice = 'Pristup planiranju budzeta je dozvoljen samo ulogama admin, glavni_racunovodja i finansijski_direktor.';
+    this.accessNotice = 'Pristup planiranju budžeta je dozvoljen samo ulogama admin, glavni_racunovodja i finansijski_direktor.';
     return;
   }
 
@@ -322,7 +609,7 @@ export class HomeComponent implements OnInit {
 
   public idiNaIzvjestaje(): void {
     if (!this.canOpenReports) {
-      this.accessNotice = 'Pristup izvjestajima je dozvoljen samo ulogama admin, glavni_racunovodja i finansijski_direktor.';
+      this.accessNotice = 'Pristup izvještajima je dozvoljen samo ulogama admin, glavni_racunovodja i finansijski_direktor.';
       return;
     }
 
@@ -333,7 +620,7 @@ export class HomeComponent implements OnInit {
     const totals = new Map<string, { total: number; count: number }>();
 
     this.expenses.forEach((expense) => {
-      const label = String(expense[fieldName] || 'Nerasporedjeno');
+      const label = String(expense[fieldName] || 'Neraspoređeno');
       const existing = totals.get(label) || { total: 0, count: 0 };
       existing.total += Number(expense.iznos || 0);
       existing.count += 1;

@@ -41,7 +41,8 @@ export class IngestionService implements IIngestionService {
     const rawRows = this.parseFile(file);
     const referenceData = await this.expenseService.getReferenceData();
     const lookup = this.buildReferenceLookup(referenceData);
-    const rows = rawRows.map((raw: any, index: number) => this.mapAndValidateRow(raw, index + 2, lookup));
+    const mappedRows = rawRows.map((raw: any, index: number) => this.mapAndValidateRow(raw, index + 2, lookup));
+    const rows = await Promise.all(mappedRows.map((row: any) => this.applyExpenseValidation(row)));
     const validRows = rows.filter((row: any) => row.isValid).length;
 
     return {
@@ -202,6 +203,37 @@ export class IngestionService implements IIngestionService {
       errors,
       warnings,
     };
+  }
+
+  private async applyExpenseValidation(row: any) {
+    if (!row.isValid) {
+      return row;
+    }
+
+    const validation = await this.expenseService.validateExpenseBeforeCreation(row.expense);
+
+    if (Array.isArray(validation?.validationErrors) && validation.validationErrors.length > 0) {
+      row.errors.push(
+        ...validation.validationErrors.map((message: string) => ({
+          field: "expense",
+          message,
+        }))
+      );
+      row.isValid = false;
+    }
+
+    if (Array.isArray(validation?.warnings) && validation.warnings.length > 0) {
+      row.warnings.push(
+        ...validation.warnings.map((warning: any) => ({
+          field: "ai",
+          type: warning.type,
+          severity: warning.severity,
+          message: warning.message,
+        }))
+      );
+    }
+
+    return row;
   }
 
   private buildReferenceLookup(referenceData: any): ReferenceLookup {

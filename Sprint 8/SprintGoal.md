@@ -7,7 +7,7 @@ Sprint 8
 
 ## Sprint cilj
 
-Implementirati modul za pregled podataka s naprednim pretraživanjem, filtriranjem i sortiranjem troškova, budžeta i referentnih podataka, te integrisati historiju uvoza s detaljnim uvidom u parsirane redove i greške. Razviti sveobuhvatan modul za finansijsko izvještavanje koji omogućava generisanje sažetih i detaljnih izvještaja, te njihov izvoz u XLSX, CSV i PDF formate uz napredne agregacije i vizuelne indikatore. Dodatno, unificirati prikaz datuma u `dd.mm.yyyy` formatu kroz cijeli sistem, rješavajući povratne informacije Product Ownera iz prethodnog sprinta.
+Implementirati modul za pregled podataka s naprednim pretraživanjem, filtriranjem i sortiranjem troškova, budžeta i referentnih podataka te integrisati historiju uvoza s detaljnim uvidom u parsirane redove i greške. Razviti sveobuhvatan modul za finansijsko izvještavanje koji omogućava generisanje sažetih i detaljnih izvještaja te njihov izvoz u XLSX, CSV i PDF formate. Dodatno, unificirati prikaz datuma u `dd.mm.yyyy` formatu kroz cijeli sistem, rješavajući povratne informacije Product Ownera iz prethodnog sprinta.
 
 ---
 

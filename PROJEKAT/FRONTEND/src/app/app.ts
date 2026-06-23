@@ -1,8 +1,10 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { AuthGuardService } from '../middleware/middleware.authguard';
 import { environment } from '../environments/environment';
+import { NotificationService } from '../services/notification.service';
 import { UserService } from '../services/user.service';
 
 @Component({
@@ -11,20 +13,24 @@ import { UserService } from '../services/user.service';
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
-export class App implements OnInit {
+export class App implements OnInit, OnDestroy {
   private readonly authService = inject(AuthGuardService);
   private readonly userService = inject(UserService);
+  private readonly notificationService = inject(NotificationService);
   private readonly router = inject(Router);
+  private readonly subscriptions = new Subscription();
 
   public readonly expenseRoles = ['admin', 'administrativni_radnik', 'administrativni_zaposlenik'];
   public readonly budgetRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
   public readonly dataOverviewRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
   public readonly reportRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
+  public readonly notificationRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
   public readonly adminConsoleUrl = environment.keycloakUrl;
   public isLoading = false;
   public navMessage = '';
   public isLoggedIn = false;
   public primaryRole = '';
+  public readonly unreadNotificationCount$ = this.notificationService.unreadCount$;
 
   public ngOnInit(): void {
     if (window.location.hostname === '127.0.0.1' && window.location.port === '4200') {
@@ -33,12 +39,20 @@ export class App implements OnInit {
     }
 
     this.refreshAuthState();
-    this.authService.authState$.subscribe((isAuthenticated) => {
+    this.syncNotificationRefresh();
+
+    this.subscriptions.add(this.authService.authState$.subscribe((isAuthenticated) => {
       this.isLoggedIn = isAuthenticated;
       this.primaryRole = isAuthenticated ? this.authService.getPrimaryRole() : '';
-    });
+      this.syncNotificationRefresh();
+    }));
 
     void this.handleKeycloakCallback();
+  }
+
+  public ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
+    this.notificationService.stopUnreadCountRefresh();
   }
 
   public get canOpenExpenses(): boolean {
@@ -55,6 +69,10 @@ export class App implements OnInit {
 
   public get canOpenReports(): boolean {
     return this.authService.hasAnyRole(this.reportRoles);
+  }
+
+  public get canOpenNotifications(): boolean {
+    return this.authService.hasAnyRole(this.notificationRoles);
   }
 
   public get isAuthenticated(): boolean {
@@ -167,6 +185,26 @@ export class App implements OnInit {
     });
   }
 
+  public openNotificationsTab(event: Event): void {
+    if (!this.isAuthenticated) {
+      event.preventDefault();
+      this.navMessage = 'Prijavite se da biste pristupili aplikaciji.';
+      void this.router.navigate(['/']);
+      return;
+    }
+
+    if (this.canOpenNotifications) {
+      this.navMessage = '';
+      return;
+    }
+
+    event.preventDefault();
+    this.navMessage = 'Notifikacijama mogu pristupiti samo admin, glavni_racunovodja i finansijski_direktor.';
+    void this.router.navigate(['/home'], {
+      queryParams: { accessDenied: 'notifikacije' },
+    });
+  }
+
   private async handleKeycloakCallback(): Promise<void> {
     if (!this.authService.hasKeycloakCallback()) {
       return;
@@ -197,6 +235,7 @@ export class App implements OnInit {
       this.isLoading = false;
       this.navMessage = '';
       this.refreshAuthState();
+      this.syncNotificationRefresh();
       await this.router.navigate(['/home']);
     }
   }
@@ -204,5 +243,14 @@ export class App implements OnInit {
   private refreshAuthState(): void {
     this.isLoggedIn = this.authService.isAuthenticated();
     this.primaryRole = this.isLoggedIn ? this.authService.getPrimaryRole() : '';
+  }
+
+  private syncNotificationRefresh(): void {
+    if (this.isLoggedIn && this.canOpenNotifications) {
+      this.notificationService.startUnreadCountRefresh();
+      return;
+    }
+
+    this.notificationService.stopUnreadCountRefresh();
   }
 }

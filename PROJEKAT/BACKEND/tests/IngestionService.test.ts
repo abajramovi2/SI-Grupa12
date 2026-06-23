@@ -2,6 +2,7 @@ export {};
 
 const mockExpenseService = {
   getReferenceData: jest.fn(),
+  validateExpenseBeforeCreation: jest.fn(),
   createExpense: jest.fn(),
 };
 
@@ -19,6 +20,7 @@ jest.mock("../DAL/Repositories/IngestionRepository", () => ({
 }));
 
 const { IngestionService } = require("../BLL/Services/IngestionService");
+const XLSX = require("xlsx");
 
 describe("IngestionService", () => {
   let service: any;
@@ -35,6 +37,11 @@ describe("IngestionService", () => {
     jest.clearAllMocks();
     service = new IngestionService();
     mockExpenseService.getReferenceData.mockResolvedValue(referenceData);
+    mockExpenseService.validateExpenseBeforeCreation.mockResolvedValue({
+      isValid: true,
+      validationErrors: [],
+      warnings: [],
+    });
   });
 
   test("treba parsirati CSV, mapirati sifarnike i vratiti validan preview", async () => {
@@ -96,6 +103,67 @@ describe("IngestionService", () => {
     expect(result.rows[0].expense.datum).toBe("2026-05-01");
   });
 
+  test("treba dodati AI upozorenja u preview za anomalije u importovanom fajlu", async () => {
+    mockExpenseService.validateExpenseBeforeCreation.mockResolvedValue({
+      isValid: true,
+      validationErrors: [],
+      warnings: [
+        {
+          type: "AMOUNT_OUTLIER_THRESHOLD",
+          severity: "HIGH",
+          message: "Iznos je znatno veći od prosjeka.",
+        },
+      ],
+    });
+
+    const csv = ["naziv,iznos,datum,kategorija,odjel,valuta", "Server,50000,2026-05-02,Oprema,Finansije,BAM"].join("\n");
+
+    const result = await service.previewImport({
+      originalName: "anomalije.csv",
+      mimetype: "text/csv",
+      buffer: Buffer.from(csv),
+    });
+
+    expect(result.validRows).toBe(1);
+    expect(result.rows[0].warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "ai",
+          type: "AMOUNT_OUTLIER_THRESHOLD",
+          severity: "HIGH",
+        }),
+      ])
+    );
+  });
+
+  test("treba oznaciti red kao nevalidan ako ExpenseService validacija odbije importovani red", async () => {
+    mockExpenseService.validateExpenseBeforeCreation.mockResolvedValue({
+      isValid: false,
+      validationErrors: ["Datum troška ne može biti u budućnosti."],
+      warnings: [],
+    });
+
+    const csv = ["naziv,iznos,datum,kategorija,odjel,valuta", "Server,500,2026-05-02,Oprema,Finansije,BAM"].join("\n");
+
+    const result = await service.previewImport({
+      originalName: "nevalidan-red.csv",
+      mimetype: "text/csv",
+      buffer: Buffer.from(csv),
+    });
+
+    expect(result.validRows).toBe(0);
+    expect(result.invalidRows).toBe(1);
+    expect(result.rows[0].isValid).toBe(false);
+    expect(result.rows[0].errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "expense",
+          message: "Datum troška ne može biti u budućnosti.",
+        }),
+      ])
+    );
+  });
+
   test("treba potvrditi uvoz i upisati historiju", async () => {
     const expense = {
       naziv: "Laptop",
@@ -132,6 +200,87 @@ describe("IngestionService", () => {
       })
     );
   });
+
+  test("treba parsirati XLSX fajl i vratiti redove iz prve radne sveske", async () => {
+    const readSpy = jest.spyOn(XLSX, "read").mockReturnValue({
+      SheetNames: ["Sheet1"],
+      Sheets: { Sheet1: {} },
+    } as any);
+    const sheetSpy = jest.spyOn(XLSX.utils, "sheet_to_json").mockReturnValue([
+      {
+        naziv: "Laptop",
+        iznos: "1200.50",
+        datum: "2026-05-01",
+        kategorija: "Oprema",
+        odjel: "Finansije",
+        valuta: "BAM",
+      },
+    ] as any);
+
+    const result = await service.previewImport({
+      originalName: "troskovi.xlsx",
+      mimetype: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer: Buffer.from("fake"),
+    });
+
+    expect(result.totalRows).toBe(1);
+    expect(readSpy).toHaveBeenCalled();
+    expect(sheetSpy).toHaveBeenCalled();
+
+    readSpy.mockRestore();
+    sheetSpy.mockRestore();
+  });
+
+  test("treba vratiti prazan preview za XLSX bez radne sveske", async () => {
+    const readSpy = jest.spyOn(XLSX, "read").mockReturnValue({
+      SheetNames: [],
+      Sheets: {},
+    } as any);
+
+    const result = await service.previewImport({
+      originalName: "prazan.xlsx",
+      mimetype: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer: Buffer.from("fake"),
+    });
+
+    expect(result.totalRows).toBe(0);
+    expect(result.rows).toHaveLength(0);
+
+    readSpy.mockRestore();
+  });
+
+  test("treba prijaviti nepoznat obavezni sifarnik kada je ID neispravan", async () => {
+    const csv = [
+      "naziv,iznos,datum,kategorijaId,odjelId,valutaId",
+      "Laptop,1200,2026-05-01,nepostojeci-kat,odj-1,val-1",
+    ].join("\n");
+
+    const result = await service.previewImport({
+      originalName: "nepostojeci-id.csv",
+      mimetype: "text/csv",
+      buffer: Buffer.from(csv),
+    });
+
+    expect(result.validRows).toBe(0);
+    expect(result.rows[0].errors.some((error: any) => error.field === "kategorija")).toBe(true);
+  });
+
+  test("treba odbiti red sa praznim iznosom", async () => {
+    const csv = [
+      "naziv,iznos,datum,kategorija,odjel,valuta",
+      "Laptop,,2026-05-01,Oprema,Finansije,BAM",
+    ].join("\n");
+
+    const result = await service.previewImport({
+      originalName: "prazan-iznos.csv",
+      mimetype: "text/csv",
+      buffer: Buffer.from(csv),
+    });
+
+    expect(result.validRows).toBe(0);
+    expect(result.rows[0].errors.some((error: any) => error.field === "iznos")).toBe(true);
+  });
+
   test("treba baciti gresku ako fajl nije poslan", async () => {
   await expect(service.previewImport({ originalName: "", buffer: null })).rejects.toThrow(
     "Fajl za uvoz je obavezan."

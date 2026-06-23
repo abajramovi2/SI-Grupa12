@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import {
   DataOverview,
   DataOverviewBudget,
@@ -9,9 +10,16 @@ import {
   DataOverviewExpense,
   DataOverviewProject,
   DataOverviewSupplier,
+  Comment,
 } from '../../../models/entities';
 import { DataOverviewService } from '../../../services/data-overview.service';
 import { IngestionService, ImportHistoryEntry } from '../../../services/ingestion.service';
+import { CommentService } from '../../../services/comment.service';
+import { CategoryComparisonComponent } from './components/category-comparison/category-comparison';
+import { PlannedActualComparisonComponent } from './components/planned-actual-comparison/planned-actual-comparison';
+import { SelectedExpenseComparisonComponent } from './components/selected-expense-comparison/selected-expense-comparison';
+
+type GroupComparisonMode = 'category' | 'department' | 'categoryDepartment' | 'period';
 
 type DetailField = {
   label: string;
@@ -29,13 +37,14 @@ type SelectedDetail = {
 @Component({
   selector: 'app-data-overview',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule, SelectedExpenseComparisonComponent, CategoryComparisonComponent, PlannedActualComparisonComponent],
   templateUrl: './data-overview.html',
   styleUrl: './data-overview.css',
 })
 export class DataOverviewComponent implements OnInit {
   private readonly dataOverviewService = inject(DataOverviewService);
   private readonly ingestionService = inject(IngestionService);
+  private readonly commentService = inject(CommentService);
   private readonly cdr = inject(ChangeDetectorRef);
 
   public overview: DataOverview = this.getEmptyOverview();
@@ -45,6 +54,26 @@ export class DataOverviewComponent implements OnInit {
   public importHistoryMessage = '';
   public importHistory: ImportHistoryEntry[] = [];
   public selectedDetail: SelectedDetail | null = null;
+  public selectedExpenseIds: Set<string | number> = new Set();
+  public isComparisonPanelOpen = false;
+  public isCategoryComparisonPanelOpen = false;
+  public isPlannedActualComparisonPanelOpen = false;
+  public categoryComparisonSelectedCategories: Set<string> = new Set();
+  public categoryComparisonSelectedDepartments: Set<string> = new Set();
+  public categoryComparisonDateFrom = '';
+  public categoryComparisonDateTo = '';
+  public categoryComparisonMode: GroupComparisonMode = 'category';
+  public plannedActualSelectedCategories: Set<string> = new Set();
+  public plannedActualSelectedDepartments: Set<string> = new Set();
+  public plannedActualDateFrom = '';
+  public plannedActualDateTo = '';
+
+  public showChatModal = false;
+  public chatExpense: DataOverviewExpense | null = null;
+  public chatComments: Comment[] = [];
+  public newCommentText = '';
+  public isLoadingComments = false;
+  public isSendingComment = false;
 
   public ngOnInit(): void {
     this.loadOverview();
@@ -63,10 +92,20 @@ export class DataOverviewComponent implements OnInit {
     return Object.values(this.overview).some((items) => items.length > 0);
   }
 
+  public get selectedExpenses(): DataOverviewExpense[] {
+    return this.overview.troskovi.filter((expense) => this.selectedExpenseIds.has(expense.id));
+  }
+
+  public get canCompareExpenses(): boolean {
+    return this.selectedExpenseIds.size >= 2;
+  }
+
   public loadOverview(): void {
     this.isLoading = true;
     this.errorMessage = '';
     this.selectedDetail = null;
+    this.clearExpenseSelection();
+    this.isComparisonPanelOpen = false;
 
     this.dataOverviewService.getOverview().subscribe({
       next: (overview) => {
@@ -76,7 +115,7 @@ export class DataOverviewComponent implements OnInit {
       },
       error: (error) => {
         console.error(error);
-        this.errorMessage = error?.error?.message || 'Greska pri dohvatu pregleda podataka.';
+        this.errorMessage = error?.error?.message || 'Greška pri dohvatu pregleda podataka.';
         this.isLoading = false;
         this.cdr.detectChanges();
       },
@@ -115,39 +154,109 @@ export class DataOverviewComponent implements OnInit {
     return expense.valutaKod || expense.valutaNaziv || '-';
   }
 
+  public isExpenseSelected(expenseId: string | number): boolean {
+    return this.selectedExpenseIds.has(expenseId);
+  }
+
+  public toggleExpenseSelection(expense: DataOverviewExpense): void {
+    if (this.selectedExpenseIds.has(expense.id)) {
+      this.selectedExpenseIds.delete(expense.id);
+    } else {
+      this.selectedExpenseIds.add(expense.id);
+    }
+
+    if (!this.canCompareExpenses) {
+      this.isComparisonPanelOpen = false;
+    }
+  }
+
+  public areAllFilteredExpensesSelected(): boolean {
+    return this.filteredExpenses.length > 0 && this.filteredExpenses.every((expense) => this.selectedExpenseIds.has(expense.id));
+  }
+
+  public selectAllFilteredExpenses(): void {
+    if (this.areAllFilteredExpensesSelected()) {
+      this.filteredExpenses.forEach((expense) => this.selectedExpenseIds.delete(expense.id));
+    } else {
+      this.filteredExpenses.forEach((expense) => this.selectedExpenseIds.add(expense.id));
+    }
+
+    if (!this.canCompareExpenses) {
+      this.isComparisonPanelOpen = false;
+    }
+  }
+
+  public clearExpenseSelection(): void {
+    this.selectedExpenseIds.clear();
+    this.isComparisonPanelOpen = false;
+  }
+
+  public openComparisonPanel(): void {
+    if (!this.canCompareExpenses) {
+      return;
+    }
+
+    this.selectedDetail = null;
+    this.isComparisonPanelOpen = true;
+  }
+
+  public closeComparisonPanel(): void {
+    this.isComparisonPanelOpen = false;
+  }
+
+  public openCategoryComparisonPanel(): void {
+    this.selectedDetail = null;
+    this.isCategoryComparisonPanelOpen = true;
+  }
+
+  public closeCategoryComparisonPanel(): void {
+    this.isCategoryComparisonPanelOpen = false;
+  }
+
+  public openPlannedActualComparisonPanel(): void {
+    this.selectedDetail = null;
+    this.isPlannedActualComparisonPanelOpen = true;
+  }
+
+  public closePlannedActualComparisonPanel(): void {
+    this.isPlannedActualComparisonPanelOpen = false;
+  }
+
   public openExpenseDetails(expense: DataOverviewExpense): void {
     this.selectedDetail = {
-      type: 'Trosak',
-      title: expense.naziv || 'Trosak',
+      type: 'Trošak',
+      title: expense.naziv || 'Trošak',
       fields: [
         { label: 'Naziv', value: this.formatValue(expense.naziv) },
         { label: 'Iznos', value: this.formatAmount(expense.iznos) },
         { label: 'Datum', value: this.formatDate(expense.datum) },
         { label: 'Opis', value: this.formatValue(expense.opis) },
         { label: 'Status validacije', value: this.formatValue(expense.statusValidacije) },
+        { label: 'Tip anomalije', value: this.formatAnomalyTip(expense.tipAnomalije) },
+        { label: 'Opis anomalije', value: this.formatValue(expense.opisAnomalije) },
         { label: 'Kategorija naziv', value: this.formatValue(expense.kategorijaNaziv) },
         { label: 'Odjel naziv', value: this.formatValue(expense.odjelNaziv) },
         { label: 'Valuta kod', value: this.formatValue(expense.valutaKod) },
         { label: 'Valuta naziv', value: this.formatValue(expense.valutaNaziv) },
         { label: 'Projekat naziv', value: this.formatValue(expense.projekatNaziv) },
-        { label: 'Dobavljac naziv', value: this.formatValue(expense.dobavljacNaziv) },
+        { label: 'Dobavljač naziv', value: this.formatValue(expense.dobavljacNaziv) },
       ],
     };
   }
 
   public openBudgetDetails(budget: DataOverviewBudget): void {
     this.selectedDetail = {
-      type: 'Budzet',
-      title: budget.naziv || 'Budzet',
+      type: 'Budžet',
+      title: budget.naziv || 'Budžet',
       fields: [
         { label: 'Naziv', value: this.formatValue(budget.naziv) },
         { label: 'Planirani iznos', value: this.formatAmount(budget.planiraniIznos) },
-        { label: 'Datum pocetka', value: this.formatDate(budget.datumPocetka) },
-        { label: 'Datum zavrsetka', value: this.formatDate(budget.datumZavrsetka) },
+        { label: 'Datum početka', value: this.formatDate(budget.datumPocetka) },
+        { label: 'Datum završetka', value: this.formatDate(budget.datumZavrsetka) },
         { label: 'Odjel naziv', value: this.formatValue(budget.odjelNaziv) },
         { label: 'Kategorije', value: this.getBudgetCategories(budget) },
         { label: 'Projekat naziv', value: this.formatValue(budget.projekatNaziv) },
-        { label: 'Verzija budzeta', value: this.formatValue(budget.verzijaBudzeta) },
+        { label: 'Verzija budžeta', value: this.formatValue(budget.verzijaBudzeta) },
         { label: 'Status odobrenja', value: this.formatValue(budget.statusOdobrenja) },
       ],
     };
@@ -170,7 +279,7 @@ export class DataOverviewComponent implements OnInit {
       title: department.naziv || 'Odjel',
       fields: [
         { label: 'Naziv', value: this.formatValue(department.naziv) },
-        { label: 'Sifra odjela', value: this.formatValue(department.sifraOdjela) },
+        { label: 'Šifra odjela', value: this.formatValue(department.sifraOdjela) },
       ],
     };
   }
@@ -192,10 +301,10 @@ export class DataOverviewComponent implements OnInit {
       title: project.nazivProjekta || 'Projekat',
       fields: [
         { label: 'Naziv projekta', value: this.formatValue(project.nazivProjekta) },
-        { label: 'Sifra projekta', value: this.formatValue(project.sifraProjekta) },
-        { label: 'Budzet projekta', value: this.formatAmount(project.budzetProjekta) },
-        { label: 'Datum pocetka', value: this.formatDate(project.datumPocetak) },
-        { label: 'Datum zavrsetka', value: this.formatDate(project.datumZavrsetak) },
+        { label: 'Šifra projekta', value: this.formatValue(project.sifraProjekta) },
+        { label: 'Budžet projekta', value: this.formatAmount(project.budzetProjekta) },
+        { label: 'Datum početka', value: this.formatDate(project.datumPocetak) },
+        { label: 'Datum završetka', value: this.formatDate(project.datumZavrsetak) },
         { label: 'Status', value: this.formatValue(project.status) },
       ],
     };
@@ -203,8 +312,8 @@ export class DataOverviewComponent implements OnInit {
 
   public openSupplierDetails(supplier: DataOverviewSupplier): void {
     this.selectedDetail = {
-      type: 'Dobavljac',
-      title: supplier.nazivFirme || 'Dobavljac',
+      type: 'Dobavljač',
+      title: supplier.nazivFirme || 'Dobavljač',
       fields: [
         { label: 'Naziv firme', value: this.formatValue(supplier.nazivFirme) },
         { label: 'PIB broj', value: this.formatValue(supplier.pibIdBroj) },
@@ -245,6 +354,21 @@ export class DataOverviewComponent implements OnInit {
     return this.formatValue(row?.[fieldName]);
   }
 
+  public onBudgetFilterDateChange(value: string, fieldName: 'from' | 'to'): void {
+    const isoDate = this.toIsoDate(value);
+    if (fieldName === 'from') {
+      this.budgetFilterPeriodOd = isoDate;
+      return;
+    }
+
+    this.budgetFilterPeriodDo = isoDate;
+  }
+
+  public toDisplayDate(value: string): string {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? `${match[3]}.${match[2]}.${match[1]}` : value;
+  }
+
   private normalizeOverview(overview: DataOverview | null | undefined): DataOverview {
     const empty = this.getEmptyOverview();
 
@@ -277,6 +401,24 @@ export class DataOverviewComponent implements OnInit {
     }
 
     return String(value);
+  }
+
+  formatAnomalyTip(tip: string | null | undefined): string {
+    if (!tip) return '-';
+    const mape: Record<string, string> = {
+      OUT_OF_HOURS_ENTRY: 'Van radnog vremena',
+      POTENCIJALNO_CIJEPANJE_RACUNA: 'Cijepanje računa',
+      UCESTALO_UREDREIVANJE: 'Učestalo uređivanje',
+      UCESTALO_BRISANJE: 'Učestalo brisanje',
+      BUDGET_EXCEEDED: 'Prekoračenje budžeta',
+      BUDGET_NOT_DEFINED: 'Budžet nije definisan',
+      AMOUNT_OUTLIER_THRESHOLD: 'Neuobičajen iznos',
+      AMOUNT_OUTLIER_ZSCORE: 'Statistički outlier',
+      AMOUNT_OUTLIER_IQR: 'Iznos van rasporeda',
+      UNREALISTIC_AMOUNT_TOO_SMALL: 'Sumnjivo mali iznos',
+      UNREALISTIC_AMOUNT_TOO_LARGE: 'Sumnjivo veliki iznos',
+    };
+    return mape[tip] || tip;
   }
 
   private formatAmount(value: unknown): string {
@@ -328,6 +470,18 @@ export class DataOverviewComponent implements OnInit {
 
     return `${day}.${month}.${year}`;
   }
+
+  private toIsoDate(value: string): string {
+    const trimmed = String(value || '').trim();
+    const displayMatch = trimmed.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?$/);
+    if (displayMatch) {
+      const [, day, month, year] = displayMatch;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+
+    return trimmed.match(/^\d{4}-\d{2}-\d{2}$/) ? trimmed : '';
+  }
+
   sectionSearch: string = '';
 
 showSection(name: string): boolean {
@@ -543,5 +697,72 @@ sortBudgets(column: string): void {
     this.budgetSortDirection = 'asc';
   }
 }
-}
 
+  openExpenseChat(expense: DataOverviewExpense): void {
+    this.chatExpense = expense;
+    this.showChatModal = true;
+    this.chatComments = [];
+    this.newCommentText = '';
+    this.loadChatComments();
+  }
+
+  closeExpenseChat(): void {
+    if (this.chatExpense) {
+      localStorage.setItem(`chat_read_${this.chatExpense.id}`, Date.now().toString());
+    }
+    this.showChatModal = false;
+    this.chatExpense = null;
+    this.chatComments = [];
+  }
+
+  loadChatComments(): void {
+    if (!this.chatExpense) return;
+
+    this.isLoadingComments = true;
+
+    this.commentService.getComments(this.chatExpense.id).subscribe({
+      next: (comments) => {
+        this.chatComments = comments;
+        this.isLoadingComments = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error('Greška pri dohvatu komentara:', error);
+        this.isLoadingComments = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  sendChatComment(): void {
+    if (!this.chatExpense || !this.newCommentText?.trim() || this.isSendingComment) return;
+
+    this.isSendingComment = true;
+
+    this.commentService.addComment(this.chatExpense.id, this.newCommentText.trim()).subscribe({
+      next: (comment) => {
+        this.chatComments = [...this.chatComments, comment];
+        this.newCommentText = '';
+        this.isSendingComment = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error('Greška pri slanju komentara:', error);
+        this.isSendingComment = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  getChatUnreadCount(expenseId: string | number): number {
+    const key = `chat_read_${expenseId}`;
+    const lastRead = localStorage.getItem(key);
+    if (!lastRead) return 0;
+
+    const count = this.chatComments.filter(
+      (c) => new Date(c.vrijemeUnosa).getTime() > parseInt(lastRead, 10)
+    ).length;
+
+    return count;
+  }
+}

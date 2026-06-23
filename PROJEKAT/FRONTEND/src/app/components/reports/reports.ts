@@ -8,6 +8,8 @@ import {
   ReportType,
 } from '../../../models/entities';
 import { ReportService } from '../../../services/report.service';
+import { AiAnalysisService, DatabaseAnalysisResult } from '../../../services/ai-analysis.service';
+
 
 @Component({
   selector: 'app-reports',
@@ -18,6 +20,7 @@ import { ReportService } from '../../../services/report.service';
 })
 export class ReportsComponent implements OnInit {
   private readonly reportService = inject(ReportService);
+  private readonly aiAnalysisService = inject(AiAnalysisService);
   private readonly cdr = inject(ChangeDetectorRef);
 
   public report: ExpenseReport | null = null;
@@ -28,6 +31,13 @@ export class ReportsComponent implements OnInit {
   public isExporting = false;
   public errorMessage = '';
   public successMessage = '';
+
+  // AI analiza
+  public aiAnalysis: DatabaseAnalysisResult | null = null;
+  public isAiLoading = false;
+  public aiError = '';
+  public showAiPanel = false;
+
 
   public ngOnInit(): void {
     this.loadReport();
@@ -45,7 +55,7 @@ export class ReportsComponent implements OnInit {
       return '-';
     }
 
-    const from = this.report.period.datumOd ? this.formatDate(this.report.period.datumOd) : 'Pocetak';
+    const from = this.report.period.datumOd ? this.formatDate(this.report.period.datumOd) : 'Početak';
     const to = this.report.period.datumDo ? this.formatDate(this.report.period.datumDo) : 'Danas';
 
     return `${from} - ${to}`;
@@ -60,7 +70,7 @@ export class ReportsComponent implements OnInit {
   }
 
   public get selectedReportTypeLabel(): string {
-    return this.reportType === 'detaljni' ? 'Detaljni' : 'Sazeti';
+    return this.reportType === 'detaljni' ? 'Detaljni' : 'Sažeti';
   }
 
   public get utilizationLabel(): string {
@@ -80,12 +90,12 @@ export class ReportsComponent implements OnInit {
 
   public loadReport(): void {
     if (!this.periodDatesAreValid()) {
-      this.errorMessage = 'Datumi moraju biti u formatu dd.mm.yyyy.';
+      this.errorMessage = 'Datumi moraju biti u formatu DD.MM.YYYY.';
       return;
     }
 
     if (this.periodIsInvalid) {
-      this.errorMessage = 'Datum od ne moze biti poslije datuma do.';
+      this.errorMessage = 'Datum od ne može biti poslije datuma do.';
       return;
     }
 
@@ -101,7 +111,7 @@ export class ReportsComponent implements OnInit {
       },
       error: (error) => {
         console.error(error);
-        this.errorMessage = this.getErrorMessage(error, 'Greska pri generisanju izvjestaja.');
+        this.errorMessage = this.getErrorMessage(error, 'Greška pri generisanju izvještaja.');
         this.report = null;
         this.isLoading = false;
         this.cdr.detectChanges();
@@ -145,12 +155,12 @@ export class ReportsComponent implements OnInit {
 
   public exportReport(format: ReportExportFormat): void {
     if (!this.periodDatesAreValid()) {
-      this.errorMessage = 'Datumi moraju biti u formatu dd.mm.yyyy.';
+      this.errorMessage = 'Datumi moraju biti u formatu DD.MM.YYYY.';
       return;
     }
 
     if (this.periodIsInvalid || this.isExporting) {
-      this.errorMessage = this.periodIsInvalid ? 'Datum od ne moze biti poslije datuma do.' : '';
+      this.errorMessage = this.periodIsInvalid ? 'Datum od ne može biti poslije datuma do.' : '';
       return;
     }
 
@@ -161,13 +171,13 @@ export class ReportsComponent implements OnInit {
     this.reportService.exportExpenseReport(format, this.buildFilters()).subscribe({
       next: (blob) => {
         this.downloadBlob(blob, this.getExportFilename(format));
-        this.successMessage = 'Izvjestaj je spreman za preuzimanje.';
+        this.successMessage = 'Izvještaj je spreman za preuzimanje.';
         this.isExporting = false;
         this.cdr.detectChanges();
       },
       error: (error) => {
         console.error(error);
-        this.errorMessage = this.getErrorMessage(error, 'Greska tokom izvoza izvjestaja.');
+        this.errorMessage = this.getErrorMessage(error, 'Greška tokom izvoza izvještaja.');
         this.isExporting = false;
         this.cdr.detectChanges();
       },
@@ -214,12 +224,9 @@ export class ReportsComponent implements OnInit {
   }
 
   private buildFilters(): ReportFilters {
-    const datumOd = this.normalizeDisplayDate(this.dateFrom);
-    const datumDo = this.normalizeDisplayDate(this.dateTo);
-
     return {
-      ...(datumOd ? { datumOd } : {}),
-      ...(datumDo ? { datumDo } : {}),
+      ...(this.dateFrom.trim() ? { datumOd: this.normalizeDateForApi(this.dateFrom) } : {}),
+      ...(this.dateTo.trim() ? { datumDo: this.normalizeDateForApi(this.dateTo) } : {}),
       tipIzvjestaja: this.reportType,
     };
   }
@@ -267,8 +274,18 @@ export class ReportsComponent implements OnInit {
   }
 
   private getExportFilename(format: ReportExportFormat): string {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = this.toDisplayDate(new Date().toISOString().slice(0, 10));
     return `izvjestaj-troskovi-${today}.${format}`;
+  }
+
+  private normalizeDateForApi(value: string): string {
+    const match = value.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})\.?$/);
+    if (!match) {
+      return value;
+    }
+
+    const [, day, month, year] = match;
+    return `${day}.${month}.${year}`;
   }
 
   private downloadBlob(blob: Blob, filename: string): void {
@@ -284,11 +301,62 @@ export class ReportsComponent implements OnInit {
     const message = error?.error?.message || error?.error?.error || error?.message || fallback;
 
     if (error?.status === 401 || String(message).toLowerCase().includes('token')) {
-      return 'Sesija je istekla. Odjavi se i prijavi ponovo, pa generisi izvjestaj.';
+      return 'Sesija je istekla. Odjavi se i prijavi ponovo, pa generiši izvještaj.';
     }
 
     return message;
   }
+
+  public runAiAnalysis(): void {
+    this.isAiLoading = true;
+    this.aiError = '';
+    this.aiAnalysis = null;
+    this.showAiPanel = true;
+
+    this.aiAnalysisService.runDatabaseAnalysis().subscribe({
+      next: (result) => {
+        this.aiAnalysis = result;
+        this.isAiLoading = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        this.aiError = this.getErrorMessage(error, 'Greška pri pokretanju AI analize.');
+        this.isAiLoading = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  public closeAiPanel(): void {
+    this.showAiPanel = false;
+    this.aiAnalysis = null;
+    this.aiError = '';
+  }
+
+  public get aiTrendLabel(): string {
+    switch (this.aiAnalysis?.trenKretanja) {
+      case 'RAST': return '↑ Rast';
+      case 'PAD': return '↓ Pad';
+      default: return '→ Stabilan';
+    }
+  }
+
+  public get aiTrendClass(): string {
+    switch (this.aiAnalysis?.trenKretanja) {
+      case 'RAST': return 'trend-rast';
+      case 'PAD': return 'trend-pad';
+      default: return 'trend-stabilan';
+    }
+  }
+
+  public pouzdanostLabel(p: string): string {
+    switch (p) {
+      case 'VISOKA': return '● Visoka';
+      case 'SREDNJA': return '◐ Srednja';
+      default: return '○ Niska';
+    }
+  }
+
 
   private getMonthSortValue(label: string): number {
     const monthOrder: Record<string, number> = {

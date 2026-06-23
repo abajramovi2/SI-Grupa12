@@ -1,28 +1,34 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, inject, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, inject, OnInit, OnDestroy } from '@angular/core';
 import {
   FormBuilder,
   ReactiveFormsModule,
+  FormsModule,
   Validators,
 } from '@angular/forms';
 import {
   CreateExpenseRequest,
   Expense,
   ExpenseReferenceData,
+  Comment,
 } from '../../../models/entities';
-import { ExpenseService } from '../../../services/expense.service';
+import { ExpenseService, ValidationResult } from '../../../services/expense.service';
+import { CommentService } from '../../../services/comment.service';
+import { Subject, debounceTime, takeUntil } from 'rxjs';
 
 @Component({
   selector: 'app-expenses',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule],
   templateUrl: './expenses.html',
   styleUrl: './expenses.css',
 })
-export class ExpensesComponent implements OnInit {
+export class ExpensesComponent implements OnInit, OnDestroy {
   private fb = inject(FormBuilder);
   private expenseService = inject(ExpenseService);
+  private commentService = inject(CommentService);
   private cdr = inject(ChangeDetectorRef);
+  private destroy$ = new Subject<void>();
 
   expenses: Expense[] = [];
 
@@ -36,16 +42,31 @@ export class ExpensesComponent implements OnInit {
 
   isLoading = false;
   isSaving = false;
+  isSuggestingCategory = false;
+  isValidating = false;
   successMessage = '';
   errorMessage = '';
+  categorySuggestionMessage = '';
   editingExpenseId: string | null = null;
   showDeleteModal = false;
   expenseToDeleteId: string | null = null;
 
+  showChatModal = false;
+  chatExpense: Expense | null = null;
+  chatComments: Comment[] = [];
+  newCommentText = '';
+  isLoadingComments = false;
+  isSendingComment = false;
+
+  // Validation warnings and errors
+  validationWarnings: Array<{ type: string; message: string; severity: 'LOW' | 'MEDIUM' | 'HIGH' }> = [];
+  validationErrors: string[] = [];
+  hasValidationWarnings = false;
+
   expenseForm = this.fb.group({
     naziv: ['', [Validators.required, Validators.maxLength(200)]],
     iznos: [null as number | null, [Validators.required, Validators.min(0.01)]],
-    datum: ['', [Validators.required, Validators.pattern(/^\d{1,2}\.\d{1,2}\.\d{4}\.?$/)]],
+    datum: ['', [Validators.required, Validators.pattern(/^\d{2}\.\d{2}\.\d{4}\.?$/)]],
     opis: [''],
 
     kategorijaId: ['', Validators.required],
@@ -59,6 +80,78 @@ export class ExpensesComponent implements OnInit {
   ngOnInit(): void {
     this.loadReferenceData();
     this.loadExpenses();
+    this.setupFormValidation();
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Real-time validation setup
+  // ─────────────────────────────────────────────────────────────
+  private setupFormValidation(): void {
+    this.expenseForm.valueChanges
+      .pipe(
+        debounceTime(500),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        this.performRealtimeValidation();
+      });
+  }
+
+  private performRealtimeValidation(): void {
+    // Clear previous warnings if form is invalid
+    if (this.expenseForm.invalid) {
+      this.validationWarnings = [];
+      this.validationErrors = [];
+      this.hasValidationWarnings = false;
+      return;
+    }
+
+    // Skip validation if we're editing and not all required fields are filled
+    const formValue = this.expenseForm.value;
+    if (!formValue.naziv || !formValue.iznos || !formValue.datum || !formValue.kategorijaId || !formValue.odjelId || !formValue.valutaId) {
+      this.validationWarnings = [];
+      this.validationErrors = [];
+      this.hasValidationWarnings = false;
+      return;
+    }
+
+    this.isValidating = true;
+
+    const payload: CreateExpenseRequest = {
+      naziv: formValue.naziv!,
+      iznos: Number(formValue.iznos),
+      datum: this.toIsoDate(formValue.datum!),
+      opis: formValue.opis || null,
+      kategorijaId: formValue.kategorijaId!,
+      odjelId: formValue.odjelId!,
+      valutaId: formValue.valutaId!,
+      projekatId: formValue.projekatId || null,
+      dobavljacId: formValue.dobavljacId || null,
+    };
+
+    this.expenseService.validateExpenseBeforeCreation(payload).subscribe({
+      next: (result: ValidationResult) => {
+        this.validationWarnings = result.warnings || [];
+        this.validationErrors = result.validationErrors || [];
+        this.hasValidationWarnings = this.validationWarnings.length > 0;
+        this.isValidating = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error('Greška pri validaciji troška:', error);
+        // Don't show errors for validation, just clear warnings
+        this.validationWarnings = [];
+        this.validationErrors = [];
+        this.hasValidationWarnings = false;
+        this.isValidating = false;
+        this.cdr.detectChanges();
+      },
+    });
   }
 
   loadExpenses(): void {
@@ -73,7 +166,7 @@ export class ExpensesComponent implements OnInit {
       },
       error: (error) => {
         console.error(error);
-        this.errorMessage = 'Greska pri dohvatu troskova. Provjerite prijavu i konekciju prema backendu.';
+        this.errorMessage = 'Greška pri dohvatu troškova. Provjerite prijavu i konekciju prema backendu.';
         this.isLoading = false;
         this.cdr.detectChanges();
       },
@@ -89,7 +182,7 @@ export class ExpensesComponent implements OnInit {
       error: (error) => {
         console.error(error);
         this.errorMessage =
-          'Greska pri dohvatu podataka za formu. Provjerite prijavu i konekciju prema backendu.';
+          'Greška pri dohvatu podataka za formu. Provjerite prijavu i konekciju prema backendu.';
         this.cdr.detectChanges();
       },
     });
@@ -98,6 +191,9 @@ export class ExpensesComponent implements OnInit {
   saveExpense(): void {
     this.successMessage = '';
     this.errorMessage = '';
+    this.validationWarnings = [];
+    this.validationErrors = [];
+    this.hasValidationWarnings = false;
 
     if (this.expenseForm.invalid) {
       this.expenseForm.markAllAsTouched();
@@ -128,14 +224,14 @@ export class ExpensesComponent implements OnInit {
             e.id === updatedExpense.id ? updatedExpense : e
           );
           this.cancelEdit();
-          this.successMessage = 'Trosak je uspjesno azuriran.';
+          this.successMessage = 'Trošak je uspješno ažuriran.';
           this.isSaving = false;
           this.cdr.detectChanges();
       },
       error: (error) => {
         console.error(error);
         this.errorMessage =
-            this.getErrorMessage(error, 'Greska pri azuriranju troska.');
+            this.getErrorMessage(error, 'Greška pri ažuriranju troška.');
         this.isSaving = false;
         this.cdr.detectChanges();
       },
@@ -145,14 +241,14 @@ export class ExpensesComponent implements OnInit {
         next: (createdExpense) => {
           this.expenses = [createdExpense, ...this.expenses];
           this.expenseForm.reset();
-          this.successMessage = 'Trosak je uspjesno spremljen.';
+          this.successMessage = 'Trošak je uspješno spremljen.';
           this.isSaving = false;
           this.cdr.detectChanges();
         },
         error: (error) => {
           console.error(error);
           this.errorMessage =
-            this.getErrorMessage(error, 'Greska pri spremanju troska.');
+            this.getErrorMessage(error, 'Greška pri spremanju troška.');
           this.isSaving = false;
           this.cdr.detectChanges();
         },
@@ -160,10 +256,61 @@ export class ExpensesComponent implements OnInit {
     }
   }
 
+  suggestCategory(): void {
+    const naziv = this.expenseForm.get('naziv')?.value?.trim() || '';
+
+    this.successMessage = '';
+    this.errorMessage = '';
+    this.categorySuggestionMessage = '';
+
+    if (!naziv) {
+      this.expenseForm.get('naziv')?.markAsTouched();
+      this.errorMessage = 'Unesite naziv troska prije AI prijedloga.';
+      return;
+    }
+
+    const dobavljacId = this.expenseForm.get('dobavljacId')?.value || '';
+    const dobavljac = this.referenceData.dobavljaci.find(
+      (item) => String(item.id) === String(dobavljacId)
+    );
+
+    this.isSuggestingCategory = true;
+
+    this.expenseService.suggestCategory({
+      naziv,
+      opis: this.expenseForm.get('opis')?.value || null,
+      dobavljac: dobavljac ? this.getItemLabel(dobavljac) : null,
+    }).subscribe({
+      next: (suggestion) => {
+        const category = this.referenceData.kategorije.find(
+          (item) => String(item.id) === String(suggestion.categoryId)
+        );
+
+        if (category) {
+          this.expenseForm.patchValue({ kategorijaId: String(category.id) });
+          this.categorySuggestionMessage =
+            `AI prijedlog: ${this.getItemLabel(category)} (${Math.round((suggestion.confidence || 0) * 100)}%).`;
+        } else {
+          this.errorMessage = suggestion.reason || 'AI nije pronasao prijedlog kategorije.';
+        }
+
+        this.isSuggestingCategory = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error(error);
+        this.errorMessage = this.getErrorMessage(error, 'Greska pri AI prijedlogu kategorije.');
+        this.isSuggestingCategory = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
   editExpense(expense: Expense): void {
     this.editingExpenseId = expense.id.toString();
     this.successMessage = '';
     this.errorMessage = '';
+    this.categorySuggestionMessage = '';
 
     this.expenseForm.patchValue({
       naziv: expense.naziv,
@@ -196,14 +343,14 @@ export class ExpensesComponent implements OnInit {
     this.expenseService.deleteExpense(this.expenseToDeleteId).subscribe({
       next: () => {
         this.expenses = this.expenses.filter((e) => e.id !== this.expenseToDeleteId);
-        this.successMessage = 'Trosak je uspjesno obrisan.';
+        this.successMessage = 'Trošak je uspješno obrisan.';
         this.closeDeleteModal();
         this.cdr.detectChanges();
       },
       error: (error) => {
         console.error(error);
         this.errorMessage =
-          this.getErrorMessage(error, 'Greska pri brisanju troska.');
+          this.getErrorMessage(error, 'Greška pri brisanju troška.');
         this.closeDeleteModal();
         this.cdr.detectChanges();
       },
@@ -219,6 +366,9 @@ export class ExpensesComponent implements OnInit {
     this.expenseForm.reset();
     this.successMessage = '';
     this.errorMessage = '';
+    this.validationWarnings = [];
+    this.validationErrors = [];
+    this.hasValidationWarnings = false;
   }
 
   isFieldInvalid(fieldName: string): boolean {
@@ -250,6 +400,23 @@ export class ExpensesComponent implements OnInit {
     );
   }
 
+  formatAnomalyTip(tip: string): string {
+    const mape: Record<string, string> = {
+      OUT_OF_HOURS_ENTRY: 'Van radnog vremena',
+      POTENCIJALNO_CIJEPANJE_RACUNA: 'Cijepanje računa',
+      UCESTALO_UREDREIVANJE: 'Učestalo uređivanje',
+      UCESTALO_BRISANJE: 'Učestalo brisanje',
+      BUDGET_EXCEEDED: 'Prekoračenje budžeta',
+      BUDGET_NOT_DEFINED: 'Budžet nije definisan',
+      AMOUNT_OUTLIER_THRESHOLD: 'Neuobičajen iznos',
+      AMOUNT_OUTLIER_ZSCORE: 'Statistički outlier',
+      AMOUNT_OUTLIER_IQR: 'Iznos van rasporeda',
+      UNREALISTIC_AMOUNT_TOO_SMALL: 'Sumnjivo mali iznos',
+      UNREALISTIC_AMOUNT_TOO_LARGE: 'Sumnjivo veliki iznos',
+    };
+    return mape[tip] || tip;
+  }
+
   private getErrorMessage(error: any, fallback: string): string {
     const backendMessage = error?.error?.message || error?.error?.error;
 
@@ -263,6 +430,79 @@ export class ExpensesComponent implements OnInit {
 
     return fallback;
   }
+
+  openChat(expense: Expense): void {
+    this.chatExpense = expense;
+    this.showChatModal = true;
+    this.chatComments = [];
+    this.newCommentText = '';
+    this.loadComments();
+  }
+
+  closeChat(): void {
+    if (this.chatExpense) {
+      this.markCommentsAsRead(this.chatExpense.id);
+    }
+    this.showChatModal = false;
+    this.chatExpense = null;
+    this.chatComments = [];
+  }
+
+  loadComments(): void {
+    if (!this.chatExpense) return;
+
+    this.isLoadingComments = true;
+
+    this.commentService.getComments(this.chatExpense.id).subscribe({
+      next: (comments) => {
+        this.chatComments = comments;
+        this.isLoadingComments = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error('Greška pri dohvatu komentara:', error);
+        this.isLoadingComments = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  sendComment(): void {
+    if (!this.chatExpense || !this.newCommentText?.trim() || this.isSendingComment) return;
+
+    this.isSendingComment = true;
+
+    this.commentService.addComment(this.chatExpense.id, this.newCommentText.trim()).subscribe({
+      next: (comment) => {
+        this.chatComments = [...this.chatComments, comment];
+        this.newCommentText = '';
+        this.isSendingComment = false;
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        console.error('Greška pri slanju komentara:', error);
+        this.isSendingComment = false;
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  getUnreadCount(expenseId: string | number): number {
+    const key = `chat_read_${expenseId}`;
+    const lastRead = localStorage.getItem(key);
+    if (!lastRead) return 0;
+
+    const count = this.chatComments.filter(
+      (c) => new Date(c.vrijemeUnosa).getTime() > parseInt(lastRead, 10)
+    ).length;
+
+    return count;
+  }
+
+  private markCommentsAsRead(expenseId: string | number): void {
+    localStorage.setItem(`chat_read_${expenseId}`, Date.now().toString());
+  }
+
   searchQuery: string = '';
 
 get filteredExpenses() {

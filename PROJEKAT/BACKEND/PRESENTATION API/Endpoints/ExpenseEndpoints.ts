@@ -28,6 +28,33 @@ function registerExpenseEndpoints(app: any, authService: IAuthService, _logger?:
     }
   });
 
+  app.post("/api/troskovi/category-suggestion", authService.requireAuthentication, authService.requireRole("admin", "administrativni_radnik", "administrativni_zaposlenik"), async (req: any, res: any) => {
+    try {
+      const suggestion = await expenseService.suggestCategory(req.body);
+      return res.status(200).json(suggestion);
+    } catch (error: any) {
+      console.error("Greska pri AI prijedlogu kategorije:", error);
+      return res.status(400).json({
+        message: error.message || "Greska pri AI prijedlogu kategorije.",
+      });
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Real-time validation endpoint for anomaly detection
+  // ─────────────────────────────────────────────────────────────
+  app.post("/api/troskovi/validate", authService.requireAuthentication, authService.requireRole("admin", "administrativni_radnik", "administrativni_zaposlenik"), async (req: any, res: any) => {
+    try {
+      const validationResult = await expenseService.validateExpenseBeforeCreation(req.body);
+      return res.status(200).json(validationResult);
+    } catch (error: any) {
+      console.error("Greška pri validaciji troška:", error);
+      return res.status(400).json({
+        message: error.message || "Greška pri validaciji troška.",
+      });
+    }
+  });
+
   app.post("/api/troskovi", authService.requireAuthentication, authService.requireRole("admin", "administrativni_radnik", "administrativni_zaposlenik"), async (req: any, res: any) => {
     try {
       const createdExpense = await expenseService.createExpense(req.body, req.user);
@@ -43,15 +70,43 @@ function registerExpenseEndpoints(app: any, authService: IAuthService, _logger?:
   app.put("/api/troskovi/:id", authService.requireAuthentication, authService.requireRole("admin", "administrativni_radnik", "administrativni_zaposlenik"), async (req: any, res: any) => {
     try {
       const id = req.params.id || req.body.id || req.query.id;
+      /* istanbul ignore next -- route param :id is required by the route */
       if (!id) {
         return res.status(400).json({ message: "ID troška je obavezan." });
       }
-      const updatedExpense = await expenseService.updateExpense(id, req.body);
+      const updatedExpense = await expenseService.updateExpense(id, req.body, req.user);
       return res.status(200).json(updatedExpense);
     } catch (error: any) {
       console.error("Greška pri ažuriranju troška:", error);
       return res.status(400).json({
         message: error.message || "Greška pri ažuriranju troška.",
+      });
+    }
+  });
+
+  app.post("/api/troskovi/:id/duplikat/sacuvaj", authService.requireAuthentication, authService.requireRole("admin", "glavni_racunovodja"), async (req: any, res: any) => {
+    try {
+      const id = req.params.id || req.body.id || req.query.id;
+      const updatedExpense = await expenseService.resolvePotentialDuplicate(id, "SAVE");
+      return res.status(200).json(updatedExpense);
+    } catch (error: any) {
+      console.error("Greska pri cuvanju duplog troska:", error);
+      return res.status(400).json({
+        message: error.message || "Greska pri cuvanju duplog troska.",
+      });
+    }
+  });
+
+  app.delete("/api/troskovi/:id/duplikat", authService.requireAuthentication, authService.requireRole("admin", "glavni_racunovodja"), async (req: any, res: any) => {
+    try {
+      const id = req.params.id || req.query.id || req.body.id;
+      /* istanbul ignore next -- route param :id is required by the route */
+      const result = await expenseService.resolvePotentialDuplicate(id, "DELETE");
+      return res.status(200).json(result);
+    } catch (error: any) {
+      console.error("Greska pri brisanju duplog troska:", error);
+      return res.status(400).json({
+        message: error.message || "Greska pri brisanju duplog troska.",
       });
     }
   });
@@ -62,7 +117,7 @@ function registerExpenseEndpoints(app: any, authService: IAuthService, _logger?:
       if (!id) {
         return res.status(400).json({ message: "ID troška je obavezan." });
       }
-      await expenseService.deleteExpense(id);
+      await expenseService.deleteExpense(id, req.user);
       return res.status(204).send();
     } catch (error: any) {
       console.error("Greška pri brisanju troška:", error);

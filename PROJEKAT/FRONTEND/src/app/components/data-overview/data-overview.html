@@ -4,7 +4,7 @@
       <p class="eyebrow">Pregled podataka</p>
       <h1>Finansijski podaci iz baze</h1>
       <p class="lead">Objedinjeni prikaz troškova, budžeta, kategorija...</p>
- 
+
       <div class="search-bar">
         <input
           type="text"
@@ -13,44 +13,48 @@
           placeholder="Pretraži sekcije (npr. troškovi, budžeti...)" />
       </div>
     </div>
- 
+
     <button type="button" class="secondary-action" (click)="loadOverview()" [disabled]="isLoading">
-      {{ isLoading ? 'Ucitavanje...' : 'Osvjezi' }}
+      {{ isLoading ? 'Učitavanje...' : 'Osvježi' }}
     </button>
   </section>
- 
+
   @if (errorMessage) {
     <p class="notice error-notice">{{ errorMessage }}</p>
   }
- 
+
   <section class="metric-grid" aria-label="Sažetak podataka">
     <article class="metric-card">
-      <span>Troskovi</span>
+      <span>Troškovi</span>
       <strong>{{ overview.troskovi.length }}</strong>
       <small>{{ totalExpensesAmount | number: '1.2-2' }} ukupno</small>
     </article>
+
     <article class="metric-card">
-      <span>Budzeti</span>
+      <span>Budžeti</span>
       <strong>{{ overview.budzeti.length }}</strong>
       <small>{{ totalBudgetsAmount | number: '1.2-2' }} planirano</small>
     </article>
+
     <article class="metric-card">
       <span>Kategorije</span>
       <strong>{{ overview.kategorije.length }}</strong>
     </article>
+
     <article class="metric-card">
       <span>Odjeli</span>
       <strong>{{ overview.odjeli.length }}</strong>
     </article>
+
     <article class="metric-card">
-      <span>Dobavljaci</span>
+      <span>Dobavljači</span>
       <strong>{{ overview.dobavljaci.length }}</strong>
     </article>
   </section>
- 
+
   @if (isLoading) {
     <section class="panel empty-state">
-      <strong>Ucitavanje pregleda podataka...</strong>
+      <strong>Učitavanje pregleda podataka...</strong>
     </section>
   } @else if (!hasAnyData) {
     <section class="panel empty-state">
@@ -58,14 +62,88 @@
       <p>Backend je vratio prazne nizove za sve tabele pregleda.</p>
     </section>
   } @else {
- 
+
     <!-- TROŠKOVI -->
     <section class="panel wide-panel" *ngIf="showSection('troskovi')">
       <div class="panel-heading">
-        <h2>Troskovi</h2>
+        <h2>Troškovi</h2>
         <span>{{ filteredExpenses.length }} zapisa</span>
       </div>
- 
+
+      
+      <div class="selection-actions">
+        <span class="selection-count">{{ selectedExpenseIds.size }} odabrano za poređenje</span>
+
+        <button
+          type="button"
+          class="compare-action"
+          (click)="openComparisonPanel()"
+          [disabled]="!canCompareExpenses">
+          Poredi odabrano
+        </button>
+<button
+          type="button"
+          class="secondary-action compact-action"
+          (click)="clearExpenseSelection()"
+          [disabled]="selectedExpenseIds.size === 0">
+          Očisti odabir
+        </button>
+        <button
+          type="button"
+          class="compare-action"
+          (click)="openCategoryComparisonPanel()">
+          Grupno poređenje
+        </button>
+
+        <button
+          type="button"
+          class="compare-action"
+          (click)="openPlannedActualComparisonPanel()">
+          Planirano vs stvarno
+        </button>
+
+        
+      </div>
+
+    
+      @if (isComparisonPanelOpen) {
+        <app-selected-expense-comparison
+          [expenses]="selectedExpenses"
+          (closePanel)="closeComparisonPanel()" />
+      }
+
+      @if (isCategoryComparisonPanelOpen) {
+        <app-category-comparison
+          [expenses]="overview.troskovi"
+          [comparisonMode]="categoryComparisonMode"
+          [selectedCategories]="categoryComparisonSelectedCategories"
+          [selectedDepartments]="categoryComparisonSelectedDepartments"
+          [dateFrom]="categoryComparisonDateFrom"
+          [dateTo]="categoryComparisonDateTo"
+          (comparisonModeChange)="categoryComparisonMode = $event"
+          (selectedCategoriesChange)="categoryComparisonSelectedCategories = $event"
+          (selectedDepartmentsChange)="categoryComparisonSelectedDepartments = $event"
+          (dateFromChange)="categoryComparisonDateFrom = $event"
+          (dateToChange)="categoryComparisonDateTo = $event"
+          (closePanel)="closeCategoryComparisonPanel()" />
+      }
+
+      @if (isPlannedActualComparisonPanelOpen) {
+        <app-planned-actual-comparison
+          [expenses]="overview.troskovi"
+          [budgets]="overview.budzeti"
+          [selectedCategories]="plannedActualSelectedCategories"
+          [selectedDepartments]="plannedActualSelectedDepartments"
+          [dateFrom]="plannedActualDateFrom"
+          [dateTo]="plannedActualDateTo"
+          (selectedCategoriesChange)="plannedActualSelectedCategories = $event"
+          (selectedDepartmentsChange)="plannedActualSelectedDepartments = $event"
+          (dateFromChange)="plannedActualDateFrom = $event"
+          (dateToChange)="plannedActualDateTo = $event"
+          (closePanel)="closePlannedActualComparisonPanel()" />
+      }
+
+    
       <div class="search-bar table-search">
         <input
           type="text"
@@ -73,33 +151,33 @@
           (input)="expenseSearch = $any($event.target).value"
           placeholder="Pretraži troškove..." />
       </div>
- 
+
       <div class="filter-row">
         <select [value]="expenseFilterKategorija" (change)="expenseFilterKategorija = $any($event.target).value">
           <option value="">Sve kategorije</option>
           <option *ngFor="let k of uniqueKategorije" [value]="k">{{ k }}</option>
         </select>
- 
+
         <select [value]="expenseFilterOdjel" (change)="expenseFilterOdjel = $any($event.target).value">
           <option value="">Svi odjeli</option>
           <option *ngFor="let o of uniqueOdjeli" [value]="o">{{ o }}</option>
         </select>
- 
+
         <select [value]="expenseFilterStatus" (change)="expenseFilterStatus = $any($event.target).value">
           <option value="">Svi statusi</option>
           <option *ngFor="let s of uniqueStatusi" [value]="s">{{ s }}</option>
         </select>
- 
+
         <select [value]="expenseFilterValuta" (change)="expenseFilterValuta = $any($event.target).value">
           <option value="">Sve valute</option>
           <option *ngFor="let v of uniqueValute" [value]="v">{{ v }}</option>
         </select>
- 
+
         <select [value]="expenseFilterDobavljac" (change)="expenseFilterDobavljac = $any($event.target).value">
-          <option value="">Svi dobavljaci</option>
+          <option value="">Svi dobavljači</option>
           <option *ngFor="let d of uniqueDobavljaci" [value]="d">{{ d }}</option>
         </select>
- 
+
         <button
           type="button"
           class="btn-reset"
@@ -107,7 +185,7 @@
           Resetuj filtere
         </button>
       </div>
- 
+
       <div class="range-filter">
         <div class="range-group">
           <label>Iznos od: <strong>{{ expenseMinIznos || expenseIznosMin | number: '1.0-0' }}</strong></label>
@@ -118,6 +196,7 @@
             [value]="expenseMinIznos || expenseIznosMin"
             (input)="expenseMinIznos = +$any($event.target).value" />
         </div>
+
         <div class="range-group">
           <label>Iznos do: <strong>{{ expenseMaxIznos || expenseIznosMax | number: '1.0-0' }}</strong></label>
           <input
@@ -128,46 +207,81 @@
             (input)="expenseMaxIznos = +$any($event.target).value" />
         </div>
       </div>
- 
+
+      <!-- LISTA TROŠKOVA -->
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
+              <th class="col-check">
+                <input
+                  type="checkbox"
+                  title="Označi sve prikazane troškove"
+                  [checked]="areAllFilteredExpensesSelected()"
+                  (click)="$event.stopPropagation()"
+                  (change)="selectAllFilteredExpenses()" />
+              </th>
+
               <th (click)="sortExpenses('naziv')" class="sortable">
                 Naziv <span>{{ expenseSortColumn === 'naziv' ? (expenseSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortExpenses('iznos')" class="sortable">
                 Iznos <span>{{ expenseSortColumn === 'iznos' ? (expenseSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortExpenses('datum')" class="sortable">
                 Datum <span>{{ expenseSortColumn === 'datum' ? (expenseSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortExpenses('kategorijaNaziv')" class="sortable">
                 Kategorija <span>{{ expenseSortColumn === 'kategorijaNaziv' ? (expenseSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortExpenses('odjelNaziv')" class="sortable">
                 Odjel <span>{{ expenseSortColumn === 'odjelNaziv' ? (expenseSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortExpenses('valutaKod')" class="sortable">
                 Valuta <span>{{ expenseSortColumn === 'valutaKod' ? (expenseSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortExpenses('projekatNaziv')" class="sortable">
                 Projekat <span>{{ expenseSortColumn === 'projekatNaziv' ? (expenseSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortExpenses('dobavljacNaziv')" class="sortable">
-                Dobavljac <span>{{ expenseSortColumn === 'dobavljacNaziv' ? (expenseSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
+                Dobavljač <span>{{ expenseSortColumn === 'dobavljacNaziv' ? (expenseSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortExpenses('statusValidacije')" class="sortable">
                 Status <span>{{ expenseSortColumn === 'statusValidacije' ? (expenseSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+              <th class="col-chat">Komentari</th>
             </tr>
           </thead>
+
           <tbody>
             @for (expense of filteredExpenses; track expense.id) {
-              <tr class="clickable-row" tabindex="0" role="button"
+              <tr
+                class="clickable-row"
+                tabindex="0"
+                role="button"
+                [class.selected-row]="isExpenseSelected(expense.id)"
                 (click)="openExpenseDetails(expense)"
                 (keydown.enter)="openExpenseDetails(expense)"
                 (keydown.space)="$event.preventDefault(); openExpenseDetails(expense)">
+
+                <td class="col-check">
+                  <input
+                    type="checkbox"
+                    [checked]="isExpenseSelected(expense.id)"
+                    (click)="$event.stopPropagation()"
+                    (keydown.enter)="$event.stopPropagation()"
+                    (keydown.space)="$event.stopPropagation()"
+                    (change)="toggleExpenseSelection(expense)" />
+                </td>
+
                 <td>{{ expense.naziv }}</td>
                 <td>{{ expense.iznos | number: '1.2-2' }}</td>
                 <td>{{ expense.datum | date: 'dd.MM.yyyy' }}</td>
@@ -176,25 +290,41 @@
                 <td>{{ getExpenseCurrency(expense) }}</td>
                 <td>{{ expense.projekatNaziv || '-' }}</td>
                 <td>{{ expense.dobavljacNaziv || '-' }}</td>
-                <td><span class="status-pill">{{ expense.statusValidacije || '-' }}</span></td>
+                <td>
+                  <span class="status-pill" [class.status-anomalija]="expense.statusValidacije === 'ANOMALIJA'">{{ expense.statusValidacije || '-' }}</span>
+                  <span class="anomaly-tip" *ngIf="expense.tipAnomalije" [title]="expense.opisAnomalije || ''">
+                    {{ formatAnomalyTip(expense.tipAnomalije) }}
+                  </span>
+                </td>
+                <td class="col-chat">
+                  <button
+                    class="btn-chat-table"
+                    title="Komentari"
+                    (click)="$event.stopPropagation(); openExpenseChat(expense)"
+                    (keydown.enter)="$event.stopPropagation(); openExpenseChat(expense)"
+                    (keydown.space)="$event.preventDefault(); $event.stopPropagation(); openExpenseChat(expense)">
+                    KOMENTARI
+                    <span class="unread-badge" *ngIf="getChatUnreadCount(expense.id) > 0">{{ getChatUnreadCount(expense.id) }}</span>
+                  </button>
+                </td>
               </tr>
             }
           </tbody>
         </table>
       </div>
- 
+
       <p *ngIf="filteredExpenses.length === 0">
         Nema rezultata za zadane filtere.
       </p>
     </section>
- 
+
     <!-- BUDŽETI -->
     <section class="panel wide-panel" *ngIf="showSection('budzeti')">
       <div class="panel-heading">
-        <h2>Budzeti</h2>
+        <h2>Budžeti</h2>
         <span>{{ filteredBudgets.length }} zapisa</span>
       </div>
- 
+
       <div class="search-bar table-search">
         <input
           type="text"
@@ -202,39 +332,57 @@
           (input)="budgetSearch = $any($event.target).value"
           placeholder="Pretraži budžete..." />
       </div>
- 
+
       <div class="filter-row">
         <select [value]="budgetFilterOdjel" (change)="budgetFilterOdjel = $any($event.target).value">
           <option value="">Svi odjeli</option>
           <option *ngFor="let o of uniqueBudgetOdjeli" [value]="o">{{ o }}</option>
         </select>
- 
+
         <select [value]="budgetFilterStatus" (change)="budgetFilterStatus = $any($event.target).value">
           <option value="">Svi statusi</option>
           <option *ngFor="let s of uniqueBudgetStatusi" [value]="s">{{ s }}</option>
         </select>
- 
+
         <select [value]="budgetFilterKategorija" (change)="budgetFilterKategorija = $any($event.target).value">
           <option value="">Sve kategorije</option>
           <option *ngFor="let k of uniqueBudgetKategorije" [value]="k">{{ k }}</option>
         </select>
- 
+
         <div class="date-filter-group">
           <label>Period od:</label>
-          <input
-            type="date"
-            [value]="budgetFilterPeriodOd"
-            (change)="budgetFilterPeriodOd = $any($event.target).value" />
+          <div class="date-inputs">
+            <input
+              type="text"
+              [value]="toDisplayDate(budgetFilterPeriodOd)"
+              placeholder="DD.MM.YYYY"
+              (input)="onBudgetFilterDateChange($any($event.target).value, 'from')" />
+            <input
+              type="date"
+              class="date-picker"
+              title="Odaberite početni datum"
+              [value]="budgetFilterPeriodOd"
+              (change)="onBudgetFilterDateChange($any($event.target).value, 'from')" />
+          </div>
         </div>
- 
+
         <div class="date-filter-group">
           <label>Period do:</label>
-          <input
-            type="date"
-            [value]="budgetFilterPeriodDo"
-            (change)="budgetFilterPeriodDo = $any($event.target).value" />
+          <div class="date-inputs">
+            <input
+              type="text"
+              [value]="toDisplayDate(budgetFilterPeriodDo)"
+              placeholder="DD.MM.YYYY"
+              (input)="onBudgetFilterDateChange($any($event.target).value, 'to')" />
+            <input
+              type="date"
+              class="date-picker"
+              title="Odaberite krajnji datum"
+              [value]="budgetFilterPeriodDo"
+              (change)="onBudgetFilterDateChange($any($event.target).value, 'to')" />
+          </div>
         </div>
- 
+
         <button
           type="button"
           class="btn-reset"
@@ -242,7 +390,7 @@
           Resetuj filtere
         </button>
       </div>
- 
+
       <div class="range-filter">
         <div class="range-group">
           <label>Iznos od: <strong>{{ budgetMinIznos || budgetIznosMin | number: '1.0-0' }}</strong></label>
@@ -253,6 +401,7 @@
             [value]="budgetMinIznos || budgetIznosMin"
             (input)="budgetMinIznos = +$any($event.target).value" />
         </div>
+
         <div class="range-group">
           <label>Iznos do: <strong>{{ budgetMaxIznos || budgetIznosMax | number: '1.0-0' }}</strong></label>
           <input
@@ -263,7 +412,7 @@
             (input)="budgetMaxIznos = +$any($event.target).value" />
         </div>
       </div>
- 
+
       <div class="table-wrap">
         <table>
           <thead>
@@ -271,27 +420,35 @@
               <th (click)="sortBudgets('naziv')" class="sortable">
                 Naziv <span>{{ budgetSortColumn === 'naziv' ? (budgetSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortBudgets('planiraniIznos')" class="sortable">
                 Planirani iznos <span>{{ budgetSortColumn === 'planiraniIznos' ? (budgetSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortBudgets('datumPocetka')" class="sortable">
                 Period <span>{{ budgetSortColumn === 'datumPocetka' ? (budgetSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortBudgets('odjelNaziv')" class="sortable">
                 Odjel <span>{{ budgetSortColumn === 'odjelNaziv' ? (budgetSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th>Kategorije</th>
+
               <th (click)="sortBudgets('projekatNaziv')" class="sortable">
                 Projekat <span>{{ budgetSortColumn === 'projekatNaziv' ? (budgetSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortBudgets('statusOdobrenja')" class="sortable">
                 Status <span>{{ budgetSortColumn === 'statusOdobrenja' ? (budgetSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
+
               <th (click)="sortBudgets('verzijaBudzeta')" class="sortable">
                 Verzija <span>{{ budgetSortColumn === 'verzijaBudzeta' ? (budgetSortDirection === 'asc' ? '↑' : '↓') : '↕' }}</span>
               </th>
             </tr>
           </thead>
+
           <tbody>
             @for (budget of filteredBudgets; track budget.id) {
               <tr
@@ -300,8 +457,8 @@
                 role="button"
                 (click)="openBudgetDetails(budget)"
                 (keydown.enter)="openBudgetDetails(budget)"
-                (keydown.space)="$event.preventDefault(); openBudgetDetails(budget)"
-              >
+                (keydown.space)="$event.preventDefault(); openBudgetDetails(budget)">
+
                 <td>{{ budget.naziv }}</td>
                 <td>{{ budget.planiraniIznos | number: '1.2-2' }}</td>
                 <td>{{ budget.datumPocetka | date: 'dd.MM.yyyy' }} - {{ budget.datumZavrsetka | date: 'dd.MM.yyyy' }}</td>
@@ -315,21 +472,22 @@
           </tbody>
         </table>
       </div>
- 
+
       <p *ngIf="filteredBudgets.length === 0">
         Nema rezultata za zadane filtere.
       </p>
     </section>
- 
+
+    <!-- HISTORIJA UVOZA -->
     <section class="panel wide-panel" *ngIf="showSection('historija')">
       <div class="panel-heading">
         <h2>Historija uvoza</h2>
         <span>{{ importHistory.length }} zapisa</span>
       </div>
- 
+
       @if (isLoadingImportHistory) {
         <div class="empty-state compact-state">
-          <strong>Ucitavanje historije uvoza...</strong>
+          <strong>Učitavanje historije uvoza...</strong>
         </div>
       } @else if (importHistoryMessage) {
         <div class="empty-state compact-state">
@@ -353,6 +511,7 @@
                 <th>Kreirao</th>
               </tr>
             </thead>
+
             <tbody>
               @for (entry of importHistory; track entry.id) {
                 <tr
@@ -361,8 +520,8 @@
                   role="button"
                   (click)="openImportHistoryDetails(entry)"
                   (keydown.enter)="openImportHistoryDetails(entry)"
-                  (keydown.space)="$event.preventDefault(); openImportHistoryDetails(entry)"
-                >
+                  (keydown.space)="$event.preventDefault(); openImportHistoryDetails(entry)">
+
                   <td><strong>{{ entry.fileName || 'Uvoz bez naziva fajla' }}</strong></td>
                   <td>{{ entry.createdAt | date: 'dd.MM.yyyy HH:mm' }}</td>
                   <td><span class="status-pill">{{ entry.status }}</span></td>
@@ -377,91 +536,117 @@
         </div>
       }
     </section>
- 
+
+    <!-- REFERENTNE TABELE -->
     <section class="reference-grid" *ngIf="showSection('kategorije') || showSection('odjeli') || showSection('valute') || showSection('projekti') || showSection('dobavljaci')">
       <article class="panel" *ngIf="showSection('kategorije')">
         <div class="panel-heading">
           <h2>Kategorije</h2>
           <span>{{ overview.kategorije.length }}</span>
         </div>
+
         <div class="compact-list">
           @for (category of overview.kategorije; track category.id) {
-            <div class="list-row clickable-card" tabindex="0" role="button"
+            <div
+              class="list-row clickable-card"
+              tabindex="0"
+              role="button"
               (click)="openCategoryDetails(category)"
               (keydown.enter)="openCategoryDetails(category)"
               (keydown.space)="$event.preventDefault(); openCategoryDetails(category)">
+
               <strong>{{ category.naziv }}</strong>
               <small>{{ category.opis || 'Bez opisa' }}</small>
             </div>
           }
         </div>
       </article>
- 
+
       <article class="panel" *ngIf="showSection('odjeli')">
         <div class="panel-heading">
           <h2>Odjeli</h2>
           <span>{{ overview.odjeli.length }}</span>
         </div>
+
         <div class="compact-list">
           @for (department of overview.odjeli; track department.id) {
-            <div class="list-row inline-row clickable-card" tabindex="0" role="button"
+            <div
+              class="list-row inline-row clickable-card"
+              tabindex="0"
+              role="button"
               (click)="openDepartmentDetails(department)"
               (keydown.enter)="openDepartmentDetails(department)"
               (keydown.space)="$event.preventDefault(); openDepartmentDetails(department)">
+
               <strong>{{ department.naziv }}</strong>
               <small>{{ department.sifraOdjela || '-' }}</small>
             </div>
           }
         </div>
       </article>
- 
+
       <article class="panel" *ngIf="showSection('valute')">
         <div class="panel-heading">
           <h2>Valute</h2>
           <span>{{ overview.valute.length }}</span>
         </div>
+
         <div class="compact-list">
           @for (currency of overview.valute; track currency.id) {
-            <div class="list-row inline-row clickable-card" tabindex="0" role="button"
+            <div
+              class="list-row inline-row clickable-card"
+              tabindex="0"
+              role="button"
               (click)="openCurrencyDetails(currency)"
               (keydown.enter)="openCurrencyDetails(currency)"
               (keydown.space)="$event.preventDefault(); openCurrencyDetails(currency)">
+
               <strong>{{ currency.kod }}</strong>
               <small>{{ currency.naziv }}</small>
             </div>
           }
         </div>
       </article>
- 
+
       <article class="panel" *ngIf="showSection('projekti')">
         <div class="panel-heading">
           <h2>Projekti</h2>
           <span>{{ overview.projekti.length }}</span>
         </div>
+
         <div class="compact-list">
           @for (project of overview.projekti; track project.id) {
-            <div class="list-row clickable-card" tabindex="0" role="button"
+            <div
+              class="list-row clickable-card"
+              tabindex="0"
+              role="button"
               (click)="openProjectDetails(project)"
               (keydown.enter)="openProjectDetails(project)"
               (keydown.space)="$event.preventDefault(); openProjectDetails(project)">
+
               <strong>{{ project.nazivProjekta }}</strong>
               <small>{{ project.sifraProjekta || '-' }} · {{ project.status || '-' }}</small>
             </div>
           }
         </div>
       </article>
- 
+
       <article class="panel suppliers-panel" *ngIf="showSection('dobavljaci')">
         <div class="panel-heading">
-          <h2>Dobavljaci</h2>
+          <h2>Dobavljači</h2>
           <span>{{ overview.dobavljaci.length }}</span>
         </div>
+
         <div class="compact-list">
           @for (supplier of overview.dobavljaci; track supplier.id) {
-            <div class="list-row clickable-card" tabindex="0" role="button"
+            <div
+              class="list-row clickable-card"
+              tabindex="0"
+              role="button"
               (click)="openSupplierDetails(supplier)"
               (keydown.enter)="openSupplierDetails(supplier)"
               (keydown.space)="$event.preventDefault(); openSupplierDetails(supplier)">
+
               <strong>{{ supplier.nazivFirme }}</strong>
               <small>{{ supplier.pibIdBroj || 'Bez PIB-a' }}</small>
             </div>
@@ -470,7 +655,7 @@
       </article>
     </section>
   }
- 
+
   @if (selectedDetail) {
     <div class="detail-overlay" (click)="closeDetails()">
       <aside class="detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title" (click)="$event.stopPropagation()">
@@ -479,9 +664,10 @@
             <p class="eyebrow">{{ selectedDetail.type }}</p>
             <h2 id="detail-title">{{ selectedDetail.title }}</h2>
           </div>
+
           <button type="button" class="icon-action" aria-label="Zatvori detalje" (click)="closeDetails()">X</button>
         </div>
- 
+
         <dl class="detail-list">
           @for (field of selectedDetail.fields; track field.label) {
             <div class="detail-row">
@@ -490,12 +676,13 @@
             </div>
           }
         </dl>
- 
+
         @if (selectedDetail.importedRows) {
           <section class="detail-section">
             <h3>Uvezeni podaci</h3>
+
             @if (selectedDetail.importedRows.length === 0) {
-              <p class="detail-note">Nema sacuvanih uvezenih zapisa za ovaj import.</p>
+              <p class="detail-note">Nema sačuvanih uvezenih zapisa za ovaj import.</p>
             } @else {
               <div class="detail-table-wrap">
                 <table>
@@ -508,9 +695,10 @@
                       <th>Odjel</th>
                       <th>Valuta</th>
                       <th>Projekat</th>
-                      <th>Dobavljac</th>
+                      <th>Dobavljač</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     @for (row of selectedDetail.importedRows; track $index) {
                       <tr>
@@ -530,10 +718,11 @@
             }
           </section>
         }
- 
+
         @if (selectedDetail.errors && selectedDetail.errors.length > 0) {
           <section class="detail-section">
             <h3>Greške pri uvozu</h3>
+
             <div class="detail-errors">
               @for (error of selectedDetail.errors; track $index) {
                 <p>
@@ -549,4 +738,46 @@
       </aside>
     </div>
   }
+
+  <div class="modal-overlay" *ngIf="showChatModal">
+    <div class="modal-card chat-modal">
+      <div class="chat-header">
+        <h3>Komentari - {{ chatExpense?.naziv || 'Trošak' }}</h3>
+        <button class="btn-close-chat" (click)="closeExpenseChat()">✕</button>
+      </div>
+
+      <div class="chat-messages">
+        <div class="chat-empty" *ngIf="chatComments.length === 0 && !isLoadingComments">
+          Nema komentara. Budite prvi koji će komentarisati.
+        </div>
+        <div class="chat-loading" *ngIf="isLoadingComments">
+          Učitavanje komentara...
+        </div>
+        <div class="chat-message" *ngFor="let comment of chatComments">
+          <div class="chat-message-header">
+            <strong>{{ comment.autorIme }} {{ comment.autorPrezime }}</strong>
+            <span class="chat-message-time">{{ comment.vrijemeUnosa | date: 'dd.MM.yyyy HH:mm' }}</span>
+          </div>
+          <div class="chat-message-text">{{ comment.tekst }}</div>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <textarea
+          [(ngModel)]="newCommentText"
+          placeholder="Unesite komentar..."
+          rows="2"
+          [disabled]="isSendingComment"
+          (keydown.enter)="sendChatComment(); $event.preventDefault()"
+        ></textarea>
+        <button
+          class="btn-send-comment"
+          [disabled]="!newCommentText.trim() || isSendingComment"
+          (click)="sendChatComment()"
+        >
+          {{ isSendingComment ? '...' : 'Pošalji' }}
+        </button>
+      </div>
+    </div>
+  </div>
 </div>

@@ -7,12 +7,25 @@ const mockBudgetRepository = {
   create: jest.fn(),
   update: jest.fn(),
   updateStatus: jest.fn(),
+  vratiNaDoradu: jest.fn(),
+  getKomentari: jest.fn(),
+  dodajKomentar: jest.fn(),
   existsDuplicate: jest.fn(),
   getUserIdFromAuth: jest.fn(),
+  getBudgetSpentStats: jest.fn(),
+};
+
+const mockNotificationService = {
+  createBudgetReturnedToRevisionNotification: jest.fn(),
+  createBudgetRevisedNotification: jest.fn(),
 };
 
 jest.mock("../DAL/Repositories/BudgetRepository", () => ({
   BudgetRepository: jest.fn().mockImplementation(() => mockBudgetRepository),
+}));
+
+jest.mock("../BLL/Services/NotificationService", () => ({
+  NotificationService: jest.fn().mockImplementation(() => mockNotificationService),
 }));
 
 const { BudgetService } = require("../BLL/Services/BudgetService");
@@ -327,7 +340,7 @@ describe("BudgetService", () => {
       expect(mockBudgetRepository.create).not.toHaveBeenCalled();
     });
 
-    test("treba prihvatiti datume u formatu dd.mm.yyyy i normalizovati ih prije upisa", async () => {
+    test("treba prihvatiti datume u formatu DD.MM.YYYY i normalizovati ih prije upisa", async () => {
       const localDatePayload = {
         ...validPayload,
         datumPocetka: "01.05.2026",
@@ -342,11 +355,12 @@ describe("BudgetService", () => {
         expect.objectContaining({
           datumPocetka: "2026-05-01",
           datumZavrsetka: "2026-05-31",
-        })
+        }),
+        null
       );
     });
 
-    test("ne treba kreirati budzet ako dd.mm.yyyy datum pocetka nije kalendarski validan", async () => {
+    test("ne treba kreirati budzet ako DD.MM.YYYY datum pocetka nije kalendarski validan", async () => {
       await expect(
         service.createBudget({ ...validPayload, datumPocetka: "31.02.2026" })
       ).rejects.toThrow("Datum pocetka je obavezan i mora biti validan.");
@@ -533,6 +547,440 @@ describe("BudgetService", () => {
         service.updateBudgetStatus("1", "ODOBREN", undefined)
       ).rejects.toThrow("Nije moguce evidentirati korisnika koji odobrava budzet.");
       expect(mockBudgetRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  describe("vratiNaDoradu", () => {
+    const authUser = {
+      sub: "finansijski-dokument-1",
+      name: "Amra Direktorica",
+      roles: ["finansijski_direktor"],
+    };
+
+    test("treba uspješno vratiti budžet na doradu kada je status na_cekanju", async () => {
+      const existing = {
+        id: "1",
+        naziv: "Budzet",
+        statusOdobrenja: "na_cekanju",
+        kreiraoKorisnikId: "creator-1",
+      };
+      const updated = { ...existing, statusOdobrenja: "na_doradi" };
+
+      mockBudgetRepository.getById.mockResolvedValue(existing);
+      mockBudgetRepository.getUserIdFromAuth.mockResolvedValue("fd-db-1");
+      mockBudgetRepository.vratiNaDoradu.mockResolvedValue(updated);
+      mockNotificationService.createBudgetReturnedToRevisionNotification.mockResolvedValue([]);
+
+      const result = await service.vratiNaDoradu(1, "Potrebna je korekcija.", authUser);
+
+      expect(result).toEqual(updated);
+      expect(mockBudgetRepository.vratiNaDoradu).toHaveBeenCalledWith(
+        1,
+        "fd-db-1",
+        "Amra Direktorica",
+        "Potrebna je korekcija."
+      );
+      expect(mockNotificationService.createBudgetReturnedToRevisionNotification).toHaveBeenCalledWith(
+        updated,
+        "Potrebna je korekcija."
+      );
+    });
+
+    test("ne treba dozvoliti povrat ako budžet nije u statusu na_cekanju ili nacrt", async () => {
+      mockBudgetRepository.getById.mockResolvedValue({
+        id: "1",
+        statusOdobrenja: "ODOBREN",
+      });
+
+      await expect(service.vratiNaDoradu(1, "Komentar", authUser)).rejects.toThrow(
+        "Budžet mora biti u statusu 'nacrt' ili 'na čekanju' da bi se mogao vratiti na doradu."
+      );
+      expect(mockBudgetRepository.vratiNaDoradu).not.toHaveBeenCalled();
+    });
+
+    test("ne treba dozvoliti povrat s praznim komentarom", async () => {
+      mockBudgetRepository.getById.mockResolvedValue({
+        id: "1",
+        statusOdobrenja: "na_cekanju",
+        kreiraoKorisnikId: "creator-1",
+      });
+      mockBudgetRepository.getUserIdFromAuth.mockResolvedValue("fd-db-1");
+
+      await expect(service.vratiNaDoradu(1, "   ", authUser)).rejects.toThrow(
+        "Komentar je obavezan pri povratu budžeta na doradu."
+      );
+      expect(mockBudgetRepository.vratiNaDoradu).not.toHaveBeenCalled();
+    });
+
+    test("ne treba dozvoliti povrat korisniku bez odgovarajuće role", async () => {
+      const unauthorizedUser = { sub: "user-1", roles: ["glavni_racunovodja"] };
+
+      await expect(service.vratiNaDoradu(1, "Komentar", unauthorizedUser)).rejects.toThrow(
+        "Nemate dozvolu za ovu akciju."
+      );
+    });
+  });
+
+  describe("submitujDoradu", () => {
+    const authUser = {
+      sub: "creator-1",
+      name: "Haris Racunovodja",
+      roles: ["glavni_racunovodja"],
+    };
+
+    test("treba uspješno submitovati doradu kada je status na_doradi", async () => {
+      const existing = {
+        id: "1",
+        naziv: "Budzet",
+        statusOdobrenja: "na_doradi",
+        kreiraoKorisnikId: "creator-1",
+        odobrioKorisnikId: "fd-1",
+      };
+      const updated = { ...existing, statusOdobrenja: "na_cekanju" };
+
+      mockBudgetRepository.getById.mockResolvedValue(existing);
+      mockBudgetRepository.getUserIdFromAuth.mockResolvedValue("creator-1");
+      mockBudgetRepository.updateStatus.mockResolvedValue(updated);
+      mockBudgetRepository.dodajKomentar.mockResolvedValue({
+        id: 10,
+        komentar: "Budžet je dorađen i ponovo poslan na odobravanje.",
+      });
+      mockNotificationService.createBudgetRevisedNotification.mockResolvedValue([]);
+
+      const result = await service.submitujDoradu(1, authUser);
+
+      expect(result).toEqual(updated);
+      expect(mockBudgetRepository.updateStatus).toHaveBeenCalledWith("1", "na_cekanju", "fd-1");
+      expect(mockBudgetRepository.dodajKomentar).toHaveBeenCalledWith(
+        "1",
+        "creator-1",
+        "Haris Racunovodja",
+        "Budžet je dorađen i ponovo poslan na odobravanje.",
+        "ispravka"
+      );
+      expect(mockNotificationService.createBudgetRevisedNotification).toHaveBeenCalledWith(
+        updated,
+        "fd-1"
+      );
+    });
+
+    test("ne treba dozvoliti submitovanje dorade od strane korisnika koji nije kreator budžeta", async () => {
+      mockBudgetRepository.getById.mockResolvedValue({
+        id: "1",
+        statusOdobrenja: "na_doradi",
+        kreiraoKorisnikId: "creator-1",
+        odobrioKorisnikId: "fd-1",
+      });
+      mockBudgetRepository.getUserIdFromAuth.mockResolvedValue("neko-drugi");
+
+      await expect(service.submitujDoradu(1, authUser)).rejects.toThrow(
+        "Samo kreator budžeta može submitovati doradu."
+      );
+      expect(mockBudgetRepository.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // getBudgetProjection
+  // ─────────────────────────────────────────────────────────────
+
+  describe("getBudgetProjection", () => {
+    const now = new Date();
+    const currentDay = now.getDate();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+    test("treba izračunati projekciju budžeta sa pozitivnim krajnjim stanjem", async () => {
+      mockBudgetRepository.getBudgetSpentStats.mockResolvedValue({
+        planiraniIznos: 100000,
+        potrosenoPrijeOvogMjeseca: 34000,
+        potrosenoUovomMjesecu: 8000,
+      });
+
+      const result = await service.getBudgetProjection("budget-1");
+
+      expect(result.budgetId).toBe("budget-1");
+      expect(result.planiraniIznos).toBe(100000);
+      expect(result.potrosenoPrijeOvogMjeseca).toBe(34000);
+      expect(result.potrosenoUovomMjesecu).toBe(8000);
+
+      // Dnevna brzina = 8000 / currentDay
+      const expectedDailyRate = 8000 / currentDay;
+      expect(result.dnevnaBrzinaTrosenja).toBeCloseTo(expectedDailyRate, 2);
+
+      // Projektovana potrošnja za mjesec = dnevna brzina * dani u mjesecu
+      const expectedProjectedMonth = expectedDailyRate * daysInMonth;
+      expect(result.projektovanaPotrosnjaZaMjesec).toBeCloseTo(expectedProjectedMonth, 2);
+
+      // Krajnje stanje = 100000 - 34000 - projektovana potrošnja
+      const expectedFinalBalance = 100000 - 34000 - expectedProjectedMonth;
+      expect(result.projektovanoKrajnjeStanje).toBeCloseTo(expectedFinalBalance, 2);
+
+      expect(mockBudgetRepository.getBudgetSpentStats).toHaveBeenCalledWith("budget-1");
+    });
+
+    test("treba izračunati negativno krajnje stanje kada je potrošnja previsoka", async () => {
+      mockBudgetRepository.getBudgetSpentStats.mockResolvedValue({
+        planiraniIznos: 15000,
+        potrosenoPrijeOvogMjeseca: 5000,
+        potrosenoUovomMjesecu: 12000,
+      });
+
+      const result = await service.getBudgetProjection("budget-2");
+
+      expect(result.budgetId).toBe("budget-2");
+      expect(result.planiraniIznos).toBe(15000);
+
+      const expectedDailyRate = 12000 / currentDay;
+      const expectedProjectedMonth = expectedDailyRate * daysInMonth;
+      const expectedFinalBalance = 15000 - 5000 - expectedProjectedMonth;
+
+      expect(result.projektovanoKrajnjeStanje).toBeCloseTo(expectedFinalBalance, 2);
+      // Ovo bi trebalo biti negativno (probijanje budžeta)
+      expect(result.projektovanoKrajnjeStanje).toBeLessThan(0);
+    });
+
+    test("treba vratiti nulu za dnevnu brzinu trošenja ako je potrošnja nula", async () => {
+      mockBudgetRepository.getBudgetSpentStats.mockResolvedValue({
+        planiraniIznos: 50000,
+        potrosenoPrijeOvogMjeseca: 0,
+        potrosenoUovomMjesecu: 0,
+      });
+
+      const result = await service.getBudgetProjection("budget-3");
+
+      expect(result.dnevnaBrzinaTrosenja).toBe(0);
+      expect(result.projektovanaPotrosnjaZaMjesec).toBe(0);
+      // Krajnje stanje = planirani iznos jer nema potrošnje
+      expect(result.projektovanoKrajnjeStanje).toBe(50000);
+    });
+
+    test("treba proslijediti budgetId repozitoriju", async () => {
+      mockBudgetRepository.getBudgetSpentStats.mockResolvedValue({
+        planiraniIznos: 10000,
+        potrosenoPrijeOvogMjeseca: 0,
+        potrosenoUovomMjesecu: 0,
+      });
+
+      await service.getBudgetProjection("my-uuid-123");
+
+      expect(mockBudgetRepository.getBudgetSpentStats).toHaveBeenCalledWith("my-uuid-123");
+    });
+
+    test("treba baciti grešku ako budžet ne postoji u repozitoriju", async () => {
+      mockBudgetRepository.getBudgetSpentStats.mockRejectedValue(
+        new Error("Budzet ne postoji.")
+      );
+
+      await expect(service.getBudgetProjection("nepostojeci-id")).rejects.toThrow(
+        "Budzet ne postoji."
+      );
+    });
+
+    test("treba vratiti sve potrebne ključeve u odgovoru", async () => {
+      mockBudgetRepository.getBudgetSpentStats.mockResolvedValue({
+        planiraniIznos: 20000,
+        potrosenoPrijeOvogMjeseca: 3000,
+        potrosenoUovomMjesecu: 1500,
+      });
+
+      const result = await service.getBudgetProjection("budget-keys");
+
+      expect(result).toHaveProperty("budgetId");
+      expect(result).toHaveProperty("planiraniIznos");
+      expect(result).toHaveProperty("potrosenoPrijeOvogMjeseca");
+      expect(result).toHaveProperty("potrosenoUovomMjesecu");
+      expect(result).toHaveProperty("dnevnaBrzinaTrosenja");
+      expect(result).toHaveProperty("projektovanaPotrosnjaZaMjesec");
+      expect(result).toHaveProperty("projektovanoKrajnjeStanje");
+    });
+  });
+  describe("additional branch coverage", () => {
+    test("createBudget baca gresku kada kreator ne moze biti evidentiran", async () => {
+      const authUser = { sub: "user-1", roles: ["admin"] };
+      mockBudgetRepository.existsDuplicate.mockResolvedValue(false);
+      mockBudgetRepository.getUserIdFromAuth.mockResolvedValue(null);
+
+      await expect(service.createBudget(validPayload, authUser)).rejects.toThrow(
+        "Nije moguce evidentirati kreatora budzeta."
+      );
+      expect(mockBudgetRepository.create).not.toHaveBeenCalled();
+    });
+
+    test("createBudget mapira overlap gresku iz repozitorija", async () => {
+      const authUser = { sub: "user-1", roles: ["admin"] };
+      mockBudgetRepository.existsDuplicate.mockResolvedValue(false);
+      mockBudgetRepository.getUserIdFromAuth.mockResolvedValue("user-1");
+      mockBudgetRepository.create.mockRejectedValue({
+        constraint: "budzeti_odjel_id_daterange_excl",
+      });
+
+      await expect(service.createBudget(validPayload, authUser)).rejects.toThrow(
+        "Nije moguce kreirati budzet jer za odabrani odjel vec postoji budzet u periodu koji se preklapa sa unesenim datumima."
+      );
+    });
+
+    test("createBudget odbija neispravan ISO datum", async () => {
+      mockBudgetRepository.existsDuplicate.mockResolvedValue(false);
+      await expect(
+        service.createBudget({
+          ...validPayload,
+          datumPocetka: "2026-02-31",
+          datumZavrsetka: "2026-12-31",
+        })
+      ).rejects.toThrow("Datum pocetka je obavezan i mora biti validan.");
+    });
+
+    test("updateBudget mapira overlap gresku iz repozitorija", async () => {
+      mockBudgetRepository.getById.mockResolvedValue({ id: "1" });
+      mockBudgetRepository.existsDuplicate.mockResolvedValue(false);
+      mockBudgetRepository.update.mockRejectedValue({
+        constraint: "budzeti_odjel_id_daterange_excl",
+      });
+
+      await expect(service.updateBudget("1", validPayload)).rejects.toThrow(
+        "Nije moguce azurirati budzet jer za odabrani odjel vec postoji budzet u periodu koji se preklapa sa unesenim datumima."
+      );
+    });
+
+    test("updateBudget propagira genericku gresku repozitorija", async () => {
+      mockBudgetRepository.getById.mockResolvedValue({ id: "1" });
+      mockBudgetRepository.existsDuplicate.mockResolvedValue(false);
+      mockBudgetRepository.update.mockRejectedValue(new Error("db"));
+
+      await expect(service.updateBudget("1", validPayload)).rejects.toThrow("db");
+    });
+
+    test("vratiNaDoradu koristi sastavljeno ime iz auth korisnika", async () => {
+      const authUser = {
+        sub: "fd-1",
+        given_name: "Amra Amra",
+        family_name: "Direktorica Direktorica",
+        roles: ["finansijski_direktor"],
+      };
+      const existing = {
+        id: "1",
+        naziv: "Budzet",
+        statusOdobrenja: "na_cekanju",
+        kreiraoKorisnikId: "creator-1",
+      };
+
+      mockBudgetRepository.getById.mockResolvedValue(existing);
+      mockBudgetRepository.getUserIdFromAuth.mockResolvedValue("fd-db-1");
+      mockBudgetRepository.vratiNaDoradu.mockResolvedValue({
+        ...existing,
+        statusOdobrenja: "na_doradi",
+      });
+      mockNotificationService.createBudgetReturnedToRevisionNotification.mockResolvedValue([]);
+
+      await service.vratiNaDoradu(1, "Potrebna je korekcija.", authUser);
+
+      expect(mockBudgetRepository.vratiNaDoradu).toHaveBeenCalledWith(
+        1,
+        "fd-db-1",
+        "Amra Direktorica",
+        "Potrebna je korekcija."
+      );
+    });
+
+    test("vratiNaDoradu koristi resource_access za autorizaciju", async () => {
+      const authUser = {
+        sub: "fd-1",
+        preferred_username: "amra.direktorica",
+        resource_access: {
+          app: { roles: ["finansijski_direktor"] },
+        },
+      };
+      const existing = {
+        id: "1",
+        naziv: "Budzet",
+        statusOdobrenja: "na_cekanju",
+        kreiraoKorisnikId: "creator-1",
+      };
+
+      mockBudgetRepository.getById.mockResolvedValue(existing);
+      mockBudgetRepository.getUserIdFromAuth.mockResolvedValue("fd-db-1");
+      mockBudgetRepository.vratiNaDoradu.mockResolvedValue({
+        ...existing,
+        statusOdobrenja: "na_doradi",
+      });
+      mockNotificationService.createBudgetReturnedToRevisionNotification.mockResolvedValue([]);
+
+      await service.vratiNaDoradu(1, "Komentar", authUser);
+
+      expect(mockBudgetRepository.vratiNaDoradu).toHaveBeenCalledWith(
+        1,
+        "fd-db-1",
+        "amra.direktorica",
+        "Komentar"
+      );
+    });
+
+    test("vratiNaDoradu baca gresku kada budzet ne postoji", async () => {
+      mockBudgetRepository.getById.mockResolvedValue(null);
+
+      await expect(service.vratiNaDoradu(1, "Komentar", { sub: "fd-1", roles: ["finansijski_direktor"] })).rejects.toThrow(
+        "Budzet ne postoji."
+      );
+    });
+
+    test("vratiNaDoradu baca gresku kada se ne moze identifikovati autor", async () => {
+      mockBudgetRepository.getById.mockResolvedValue({
+        id: "1",
+        naziv: "Budzet",
+        statusOdobrenja: "na_cekanju",
+        kreiraoKorisnikId: "creator-1",
+      });
+      mockBudgetRepository.getUserIdFromAuth.mockResolvedValue(null);
+
+      await expect(service.vratiNaDoradu(1, "Komentar", { sub: "fd-1", roles: ["finansijski_direktor"] })).rejects.toThrow(
+        "Nije moguce evidentirati korisnika koji vraca budzet na doradu."
+      );
+    });
+
+    test("submitujDoradu baca gresku kada se kreator ne moze identifikovati", async () => {
+      const authUser = {
+        sub: "creator-1",
+        name: "Haris Racunovodja",
+        roles: ["glavni_racunovodja"],
+      };
+
+      mockBudgetRepository.getById.mockResolvedValue({
+        id: "1",
+        statusOdobrenja: "na_doradi",
+        kreiraoKorisnikId: "creator-1",
+        odobrioKorisnikId: "fd-1",
+      });
+      mockBudgetRepository.getUserIdFromAuth.mockResolvedValue(null);
+
+      await expect(service.submitujDoradu(1, authUser)).rejects.toThrow(
+        /Samo kreator bud.* submitovati doradu\./
+      );
+    });
+
+    test("submitujDoradu baca gresku kada budzet ne postoji", async () => {
+      mockBudgetRepository.getById.mockResolvedValue(null);
+
+      await expect(service.submitujDoradu(1, { sub: "creator-1", roles: ["glavni_racunovodja"] })).rejects.toThrow(
+        "Budzet ne postoji."
+      );
+    });
+
+    test("submitujDoradu baca gresku kada rola nije glavni racunovodja", async () => {
+      await expect(service.submitujDoradu(1, { sub: "creator-1", roles: ["finansijski_direktor"] })).rejects.toThrow(
+        "Nemate dozvolu za ovu akciju."
+      );
+    });
+
+    test("submitujDoradu baca gresku kada budzet nije na_doradi", async () => {
+      mockBudgetRepository.getById.mockResolvedValue({
+        id: "1",
+        statusOdobrenja: "nacrt",
+        kreiraoKorisnikId: "creator-1",
+      });
+
+      await expect(service.submitujDoradu(1, { sub: "creator-1", roles: ["glavni_racunovodja"] })).rejects.toThrow(
+        /Bud.* mora biti u statusu 'na_doradi' da bi se mogao submitovati\./
+      );
     });
   });
 });

@@ -15,6 +15,9 @@ const { registerIngestionEndpoints } = require("./PRESENTATION API/Endpoints/Ing
 const { registerBudgetEndpoints } = require("./PRESENTATION API/Endpoints/BudgetEndpoints");
 const { registerDataOverviewEndpoints } = require("./PRESENTATION API/Endpoints/DataOverviewEndpoints");
 const { registerReportEndpoints } = require("./PRESENTATION API/Endpoints/ReportEndpoints");
+const { registerNotificationEndpoints } = require("./PRESENTATION API/Endpoints/NotificationEndpoints");
+const { registerAIAnalysisEndpoints } = require("./PRESENTATION API/Endpoints/AIAnalysisEndpoints");
+const { registerCommentEndpoints } = require("./PRESENTATION API/Endpoints/CommentEndpoints");
 
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -58,7 +61,7 @@ async function ensureDockerServices() {
   const composeFile = path.resolve(__dirname, "docker-compose.yml");
 
   try {
-    execSync(`docker compose -f "${composeFile}" up -d postgres keycloak`, {
+    execSync(`docker compose -f "${composeFile}" up -d postgres keycloak ai-service`, {
       stdio: "inherit",
     });
   } catch (error) {
@@ -144,6 +147,13 @@ async function ensureBaseData() {
     client = await connectWithRetry();
 
     await client.query(`
+      ALTER TABLE troskovi
+      DROP CONSTRAINT IF EXISTS chk_status_validacije;
+
+      ALTER TABLE troskovi
+      ADD CONSTRAINT chk_status_validacije
+      CHECK (status_validacije IN ('NA_CEKANJU', 'VALIDAN', 'POTENCIJALNI_DUPLIKAT', 'ANOMALIJA', 'ODBIJEN', 'ZAKLJUCAN'));
+
       CREATE TABLE IF NOT EXISTS uvoz_troskova (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         naziv_fajla VARCHAR(255),
@@ -158,6 +168,66 @@ async function ensureBaseData() {
 
         CONSTRAINT chk_uvoz_troskova_status
           CHECK (status IN ('USPJESAN', 'DJELIMICAN', 'NEUSPJESAN'))
+      );
+
+      CREATE TABLE IF NOT EXISTS ai_analize (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tip VARCHAR(50) NOT NULL,
+        status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+        parametri JSONB NOT NULL DEFAULT '{}'::jsonb,
+        rezultat JSONB,
+        error_message TEXT,
+        pokrenuto TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        zavrseno TIMESTAMP,
+
+        CONSTRAINT chk_ai_analize_status
+          CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED'))
+      );
+
+      ALTER TABLE notifikacije
+      ADD COLUMN IF NOT EXISTS tip_notifikacije VARCHAR(50) NOT NULL DEFAULT 'AI_ANOMALIJA',
+      ADD COLUMN IF NOT EXISTS povezani_trosak_id UUID NULL,
+      ADD COLUMN IF NOT EXISTS akcija_status VARCHAR(30) NULL;
+
+      ALTER TABLE notifikacije
+      DROP CONSTRAINT IF EXISTS fk_notifikacije_troskovi;
+
+      ALTER TABLE notifikacije
+      ADD CONSTRAINT fk_notifikacije_troskovi
+      FOREIGN KEY (povezani_trosak_id) REFERENCES troskovi(id) ON DELETE SET NULL;
+
+      ALTER TABLE notifikacije
+      DROP CONSTRAINT IF EXISTS chk_notifikacije_akcija_status;
+
+      ALTER TABLE notifikacije
+      ADD CONSTRAINT chk_notifikacije_akcija_status
+      CHECK (akcija_status IS NULL OR akcija_status IN ('SACUVAN', 'OBRISAN'));
+
+      ALTER TABLE budzeti
+      ADD COLUMN IF NOT EXISTS kreirao_korisnik_id UUID NULL;
+
+      ALTER TABLE budzeti
+      DROP CONSTRAINT IF EXISTS fk_budzeti_kreirao_korisnik;
+
+      ALTER TABLE budzeti
+      ADD CONSTRAINT fk_budzeti_kreirao_korisnik
+      FOREIGN KEY (kreirao_korisnik_id) REFERENCES korisnici(id) ON DELETE SET NULL;
+
+      ALTER TABLE budzeti
+      DROP CONSTRAINT IF EXISTS chk_status_odobrenja;
+
+      ALTER TABLE budzeti
+      ADD CONSTRAINT chk_status_odobrenja
+      CHECK (status_odobrenja IN ('NACRT', 'ODOBREN', 'ODBIJEN', 'na_doradi', 'na_cekanju'));
+
+      CREATE TABLE IF NOT EXISTS budzet_komentari (
+        id SERIAL PRIMARY KEY,
+        budzet_id UUID NOT NULL REFERENCES budzeti(id),
+        autor_id VARCHAR(255) NOT NULL,
+        autor_ime VARCHAR(255) NOT NULL,
+        komentar TEXT NOT NULL,
+        tip VARCHAR(50) NOT NULL CHECK (tip IN ('povrat_na_doradu', 'ispravka', 'odobravanje', 'odbijanje')),
+        kreirano_at TIMESTAMP DEFAULT NOW()
       );
 
       INSERT INTO uloge (naziv, opis) VALUES
@@ -195,6 +265,12 @@ async function ensureBaseData() {
       ON CONFLICT (sifra_odjela) DO UPDATE
       SET naziv = EXCLUDED.naziv;
     `);
+
+    const budgetWorkflowSql = fs.readFileSync(
+      path.resolve(__dirname, "migrations/005_add_budget_revision_workflow.sql"),
+      "utf-8"
+    );
+    await client.query(budgetWorkflowSql);
 
     writeLog("INFO", "Osnovni sifarnici su spremni.");
   } catch (error) {
@@ -282,7 +358,10 @@ function startServer() {
   registerDataOverviewEndpoints(app, authService, writeLog);
   registerReportEndpoints(app, authService, writeLog);
   registerIngestionEndpoints(app, authService, writeLog);
+  registerNotificationEndpoints(app, authService, writeLog);
   registerUserEndpoints(app, authService);
+  registerAIAnalysisEndpoints(app, authService, writeLog);
+  registerCommentEndpoints(app, authService, writeLog);
 
   app.listen(PORT, "0.0.0.0", () => {
     writeLog("INFO", `Backend aplikacija sluša na portu ${PORT}.`);

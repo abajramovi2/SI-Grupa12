@@ -149,7 +149,7 @@ export class AuthGuardService {
       });
 
       if (!tokenResponse.ok) {
-        return { status: 'error', message: 'Neuspjesna razmjena authorization code za access token.' };
+        return { status: 'error', message: 'Neuspješna razmjena authorization code za access token.' };
       }
 
       const tokens = (await tokenResponse.json()) as {
@@ -191,7 +191,7 @@ export class AuthGuardService {
 
       return {
         status: 'error',
-        message: error instanceof Error ? error.message : 'Greska pri loginu.',
+        message: error instanceof Error ? error.message : 'Greška pri loginu.',
       };
     }
   }
@@ -243,17 +243,20 @@ export class AuthGuardService {
   }
 
   public isAuthenticated(): boolean {
-    return this.hasStoredTokens();
+    const isAuthenticated = this.hasStoredTokens();
+    if (!isAuthenticated) {
+      this.authStateSubject.next(false);
+    }
+
+    return isAuthenticated;
   }
 
   private hasStoredTokens(): boolean {
-    return Boolean(sessionStorage.getItem(this.accessTokenKey) || sessionStorage.getItem(this.idTokenKey));
+    return this.getValidStoredTokens().length > 0;
   }
 
   public getCurrentUserRoles(): string[] {
-    const accessToken = sessionStorage.getItem(this.accessTokenKey);
-    const idToken = sessionStorage.getItem(this.idTokenKey);
-    const tokens = [accessToken, idToken].filter((token): token is string => Boolean(token));
+    const tokens = this.getValidStoredTokens();
 
     if (tokens.length === 0) return [];
 
@@ -268,6 +271,46 @@ export class AuthGuardService {
       return Array.from(roleSet);
     } catch {
       return [];
+    }
+  }
+
+  private getValidStoredTokens(): string[] {
+    const tokenEntries = [
+      { key: this.accessTokenKey, token: sessionStorage.getItem(this.accessTokenKey) },
+      { key: this.idTokenKey, token: sessionStorage.getItem(this.idTokenKey) },
+    ];
+
+    const validTokens: string[] = [];
+
+    tokenEntries.forEach(({ key, token }) => {
+      if (!token) return;
+
+      if (this.isTokenExpired(token)) {
+        sessionStorage.removeItem(key);
+        return;
+      }
+
+      validTokens.push(token);
+    });
+
+    if (validTokens.length === 0 && tokenEntries.some(({ token }) => Boolean(token))) {
+      sessionStorage.removeItem(this.refreshTokenKey);
+    }
+
+    return validTokens;
+  }
+
+  private isTokenExpired(token: string): boolean {
+    try {
+      const payload = JSON.parse(this.decodeJwtPayload(token));
+      const expiresAtSeconds = Number(payload.exp || 0);
+      if (!expiresAtSeconds) {
+        return true;
+      }
+
+      return expiresAtSeconds * 1000 <= Date.now();
+    } catch {
+      return true;
     }
   }
 

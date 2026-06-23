@@ -37,13 +37,21 @@ class ExpenseRepository {
         t.valuta_id AS "valutaId",
         v.kod AS valuta,
 
-        t.kreirao_korisnik_id AS "kreiraoKorisnikId"
+        t.kreirao_korisnik_id AS "kreiraoKorisnikId",
+        kr.ime AS "kreiraoIme",
+        kr.prezime AS "kreiraoPrezime",
+
+        a.tip_anomalije AS "tipAnomalije",
+        a.opis_detekcije AS "opisAnomalije"
       FROM troskovi t
       JOIN kategorije k ON k.id = t.kategorija_id
       JOIN odjeli o ON o.id = t.odjel_id
       JOIN valute v ON v.id = t.valuta_id
       LEFT JOIN projekti p ON p.id = t.projekat_id
       LEFT JOIN dobavljaci d ON d.id = t.dobavljac_id
+      LEFT JOIN korisnici kr ON kr.id = t.kreirao_korisnik_id
+      LEFT JOIN anomalije a ON a.trosak_id = t.id AND a.status_potvrde = 'OTVORENA'
+      WHERE t.status_validacije <> 'POTENCIJALNI_DUPLIKAT'
       ORDER BY t.datum DESC, t.naziv ASC;
     `);
 
@@ -105,6 +113,164 @@ class ExpenseRepository {
     );
 
     return this.getById(result.rows[0].id);
+  }
+
+  async updateValidationStatus(id: string, statusValidacije: string) {
+    await db.query(
+      "UPDATE troskovi SET status_validacije = $1 WHERE id = $2;",
+      [statusValidacije, id]
+    );
+
+    return this.getById(id);
+  }
+
+  async getBudgetContextForExpense(expense: any) {
+    const budgetResult = await db.query(
+      `
+      SELECT
+        b.id,
+        b.naziv,
+        b.planirani_iznos AS "planiraniIznos",
+        COALESCE(SUM(t.iznos) FILTER (WHERE t.id <> $1), 0) AS "potrosenoPrijeTroska"
+      FROM budzeti b
+      JOIN budzet_kategorije bk ON bk.budzet_id = b.id
+      LEFT JOIN troskovi t
+        ON t.odjel_id = b.odjel_id
+       AND t.kategorija_id = bk.kategorija_id
+       AND t.datum BETWEEN b.datum_pocetka AND b.datum_zavrsetka
+       AND t.status_validacije IN ('VALIDAN', 'ZAKLJUCAN')
+      WHERE b.odjel_id = $2
+        AND bk.kategorija_id = $3
+        AND $4::date BETWEEN b.datum_pocetka AND b.datum_zavrsetka
+        AND b.status_odobrenja = 'ODOBREN'
+      GROUP BY b.id
+      ORDER BY b.datum_pocetka DESC
+      LIMIT 1;
+      `,
+      [expense.id, expense.odjelId, expense.kategorijaId, expense.datum]
+    );
+
+    return budgetResult.rows[0]
+      ? {
+          ...budgetResult.rows[0],
+          planiraniIznos: Number(budgetResult.rows[0].planiraniIznos),
+          potrosenoPrijeTroska: Number(budgetResult.rows[0].potrosenoPrijeTroska),
+        }
+      : null;
+  }
+
+  async createAnomaly(trosakId: string, analysis: any) {
+    const primaryFinding = Array.isArray(analysis?.findings) && analysis.findings.length > 0
+      ? analysis.findings[0]
+      : null;
+    const anomalyType = primaryFinding?.type || "AI_ANOMALY";
+    const description = analysis?.explanation || primaryFinding?.message || "AI analiza je oznacila trosak kao anomaliju.";
+
+    const result = await db.query(
+      `
+      INSERT INTO anomalije (tip_anomalije, opis_detekcije, trosak_id, status_potvrde)
+      VALUES ($1, $2, $3, 'OTVORENA')
+      RETURNING
+        id,
+        tip_anomalije AS "tipAnomalije",
+        opis_detekcije AS "opisDetekcije",
+        trosak_id AS "trosakId",
+        status_potvrde AS "statusPotvrde";
+      `,
+      [anomalyType, description, trosakId]
+    );
+
+    return result.rows[0];
+  }
+
+  async getAiAnalysisContext(expense: any) {
+    const historicalResult = await db.query(
+      `
+      SELECT
+        id,
+        naziv,
+        iznos,
+        datum,
+        kategorija_id AS "kategorijaId",
+        odjel_id AS "odjelId",
+        dobavljac_id AS "dobavljacId"
+      FROM troskovi
+      WHERE id <> $1
+        AND kategorija_id = $2
+        AND odjel_id = $3
+        AND datum >= ($4::date - INTERVAL '12 months')
+      ORDER BY datum DESC
+      LIMIT 100;
+      `,
+      [expense.id, expense.kategorijaId, expense.odjelId, expense.datum]
+    );
+
+    const duplicateResult = await db.query(
+      `
+      SELECT id, naziv, iznos, datum
+      FROM troskovi
+      WHERE id <> $1
+        AND LOWER(TRIM(naziv)) = LOWER(TRIM($2))
+        AND iznos = $3
+        AND datum = $4
+      LIMIT 10;
+      `,
+      [expense.id, expense.naziv, expense.iznos, expense.datum]
+    );
+
+    const budgetResult = await db.query(
+      `
+      SELECT
+        b.id,
+        b.naziv,
+        b.planirani_iznos AS "planiraniIznos",
+        COALESCE(SUM(t.iznos) FILTER (WHERE t.id <> $1), 0) AS "potrosenoPrijeTroska"
+      FROM budzeti b
+      JOIN budzet_kategorije bk ON bk.budzet_id = b.id
+      LEFT JOIN troskovi t
+        ON t.odjel_id = b.odjel_id
+       AND t.kategorija_id = bk.kategorija_id
+       AND t.datum BETWEEN b.datum_pocetka AND b.datum_zavrsetka
+       AND t.status_validacije IN ('VALIDAN', 'ZAKLJUCAN')
+      WHERE b.odjel_id = $2
+        AND bk.kategorija_id = $3
+        AND $4::date BETWEEN b.datum_pocetka AND b.datum_zavrsetka
+        AND b.status_odobrenja = 'ODOBREN'
+      GROUP BY b.id
+      ORDER BY b.datum_pocetka DESC
+      LIMIT 1;
+      `,
+      [expense.id, expense.odjelId, expense.kategorijaId, expense.datum]
+    );
+
+    const budget = budgetResult.rows[0]
+      ? {
+          ...budgetResult.rows[0],
+          planiraniIznos: Number(budgetResult.rows[0].planiraniIznos),
+          potrosenoPrijeTroska: Number(budgetResult.rows[0].potrosenoPrijeTroska),
+        }
+      : null;
+
+    const recentExpensesResult = await db.query(
+      `
+      SELECT id, naziv, iznos, datum, kategorija_id AS "kategorijaId", odjel_id AS "odjelId"
+      FROM troskovi
+      WHERE id <> $1
+        AND kategorija_id = $2
+        AND odjel_id = $3
+        AND datum >= (CURRENT_DATE - INTERVAL '48 hours')
+        AND status_validacije <> 'POTENCIJALNI_DUPLIKAT'
+      ORDER BY datum DESC
+      `,
+      [expense.id, expense.kategorijaId, expense.odjelId]
+    );
+
+    return {
+      historicalExpenses: historicalResult.rows.map((row: any) => ({ ...row, iznos: Number(row.iznos) })),
+      duplicateCandidates: duplicateResult.rows.map((row: any) => ({ ...row, iznos: Number(row.iznos) })),
+      budget,
+      recentExpensesInCategory: recentExpensesResult.rows.map((row: any) => ({ ...row, iznos: Number(row.iznos) })),
+    };
   }
 
   private normalizeRole(role: string): string {
@@ -216,7 +382,9 @@ class ExpenseRepository {
     return result.rows[0]?.id || null;
   }
 
-  async update(id: string, expense: any) {
+  async update(id: string, expense: any, authUser?: any) {
+    const oldExpense = await this.getById(id);
+
     await db.query(
       `
       UPDATE troskovi
@@ -246,10 +414,46 @@ class ExpenseRepository {
       ]
     );
 
+    const korisnikId = authUser
+      ? await this.findOrCreateUserFromAuth(authUser)
+      : oldExpense?.kreiraoKorisnikId || await this.getDefaultCreatorId();
+
+    await db.query(
+      `
+      INSERT INTO audit_logovi (naziv_tabele, tip_promjene, stara_vrijednost, nova_vrijednost, korisnik_id)
+      VALUES ('troskovi', 'U', $1, $2, $3)
+      `,
+      [
+        JSON.stringify(oldExpense),
+        JSON.stringify({ ...oldExpense, ...expense, id }),
+        korisnikId,
+      ]
+    );
+
     return this.getById(id);
   }
 
-  async delete(id: string) {
+  async delete(id: string, authUser?: any) {
+    const oldExpense = await this.getById(id);
+
+    const korisnikId = authUser
+      ? await this.findOrCreateUserFromAuth(authUser)
+      : oldExpense?.kreiraoKorisnikId || await this.getDefaultCreatorId();
+
+    if (oldExpense) {
+      await db.query(
+        `
+        INSERT INTO audit_logovi (naziv_tabele, tip_promjene, stara_vrijednost, korisnik_id)
+        VALUES ('troskovi', 'D', $1, $2)
+        `,
+        [JSON.stringify(oldExpense), korisnikId]
+      );
+    }
+
+    await db.query("ALTER TABLE komentari DISABLE TRIGGER trg_zabrana_delete_komentara");
+    await db.query("DELETE FROM komentari WHERE trosak_id = $1", [id]);
+    await db.query("ALTER TABLE komentari ENABLE TRIGGER trg_zabrana_delete_komentara");
+
     await db.query("DELETE FROM troskovi WHERE id = $1;", [id]);
   }
 
@@ -279,19 +483,67 @@ class ExpenseRepository {
         t.valuta_id AS "valutaId",
         v.kod AS valuta,
 
-        t.kreirao_korisnik_id AS "kreiraoKorisnikId"
+        t.kreirao_korisnik_id AS "kreiraoKorisnikId",
+        kr.ime AS "kreiraoIme",
+        kr.prezime AS "kreiraoPrezime",
+
+        a.tip_anomalije AS "tipAnomalije",
+        a.opis_detekcije AS "opisAnomalije"
       FROM troskovi t
       JOIN kategorije k ON k.id = t.kategorija_id
       JOIN odjeli o ON o.id = t.odjel_id
       JOIN valute v ON v.id = t.valuta_id
       LEFT JOIN projekti p ON p.id = t.projekat_id
       LEFT JOIN dobavljaci d ON d.id = t.dobavljac_id
+      LEFT JOIN korisnici kr ON kr.id = t.kreirao_korisnik_id
+      LEFT JOIN anomalije a ON a.trosak_id = t.id AND a.status_potvrde = 'OTVORENA'
       WHERE t.id = $1;
       `,
       [id]
     );
 
     return this.mapExpense(result.rows[0]);
+  }
+
+  async getRecentAuditCount(korisnikId: string, tipPromjene: string, withinHours: number) {
+    const result = await db.query(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM audit_logovi
+      WHERE korisnik_id = $1
+        AND tip_promjene = $2
+        AND timestamp >= NOW() - ($3 || ' hours')::INTERVAL
+      `,
+      [korisnikId, tipPromjene, String(withinHours)]
+    );
+
+    return Number(result.rows[0]?.count || 0);
+  }
+
+  async getRecentExpensesInSameCategory(kategorijaId: string, odjelId: string, withinHours: number) {
+    const result = await db.query(
+      `
+      SELECT id, naziv, iznos, datum
+      FROM troskovi
+      WHERE kategorija_id = $1
+        AND odjel_id = $2
+        AND datum >= (CURRENT_DATE - ($3 || ' hours')::INTERVAL)
+        AND status_validacije <> 'POTENCIJALNI_DUPLIKAT'
+      ORDER BY datum DESC
+      `,
+      [kategorijaId, odjelId, String(withinHours)]
+    );
+
+    return result.rows.map((row: any) => ({ ...row, iznos: Number(row.iznos) }));
+  }
+
+  async hasComments(expenseId: string) {
+    const result = await db.query(
+      "SELECT COUNT(*)::int AS count FROM komentari WHERE trosak_id = $1",
+      [expenseId]
+    );
+
+    return Number(result.rows[0]?.count || 0) > 0;
   }
 }
 

@@ -139,6 +139,18 @@ describe("ExpenseService", () => {
       expect(mockExpenseRepository.create).toHaveBeenCalledTimes(1);
     });
 
+    test("treba nastaviti kreiranje i kada AI analiza baci gresku", async () => {
+      const createdExpense = { id: 15, ...validPayload };
+      mockExpenseRepository.create.mockResolvedValue(createdExpense);
+      (mockExpenseRepository as any).getAiAnalysisContext = jest.fn().mockResolvedValue({});
+      service.aiAnalysisService.analyzeExpense = jest.fn().mockRejectedValue(new Error("AI down"));
+
+      const result = await service.createExpense(validPayload);
+
+      expect(result).toEqual(createdExpense);
+      expect(mockExpenseRepository.create).toHaveBeenCalledWith(validPayload, undefined);
+    });
+
     test("treba proslijediti authUser repozitoriju pri kreiranju", async () => {
       const createdExpense = { id: 11, ...validPayload };
       const authUser = { sub: "user-123", roles: ["admin"] };
@@ -248,18 +260,18 @@ describe("ExpenseService", () => {
     test("ne treba kreirati trošak ako datum nije validan", async () => {
       await expect(
         service.createExpense({ ...validPayload, datum: "nije-datum" })
-      ).rejects.toThrow("Datum je obavezan i mora biti validan.");
+      ).rejects.toThrow("Datum je obavezan i mora biti u formatu DD.MM.YYYY.");
       expect(mockExpenseRepository.create).not.toHaveBeenCalled();
     });
 
     test("ne treba kreirati trošak ako datum nije poslan", async () => {
       await expect(
         service.createExpense({ ...validPayload, datum: "" })
-      ).rejects.toThrow("Datum je obavezan i mora biti validan.");
+      ).rejects.toThrow("Datum je obavezan i mora biti u formatu DD.MM.YYYY.");
       expect(mockExpenseRepository.create).not.toHaveBeenCalled();
     });
 
-    test("treba prihvatiti datum u formatu dd.mm.yyyy i normalizovati ga prije upisa", async () => {
+    test("treba prihvatiti datum u formatu DD.MM.YYYY i normalizovati ga prije upisa", async () => {
       const localDatePayload = { ...validPayload, datum: "15.05.2026" };
       const normalizedPayload = { ...validPayload, datum: "2026-05-15" };
       mockExpenseRepository.create.mockResolvedValue({ id: 14, ...normalizedPayload });
@@ -269,10 +281,10 @@ describe("ExpenseService", () => {
       expect(mockExpenseRepository.create).toHaveBeenCalledWith(normalizedPayload, undefined);
     });
 
-    test("ne treba kreirati trošak ako dd.mm.yyyy datum nije kalendarski validan", async () => {
+    test("ne treba kreirati trošak ako DD.MM.YYYY datum nije kalendarski validan", async () => {
       await expect(
         service.createExpense({ ...validPayload, datum: "31.02.2026" })
-      ).rejects.toThrow("Datum je obavezan i mora biti validan.");
+      ).rejects.toThrow("Datum je obavezan i mora biti u formatu DD.MM.YYYY.");
       expect(mockExpenseRepository.create).not.toHaveBeenCalled();
     });
   });
@@ -321,7 +333,7 @@ describe("ExpenseService", () => {
       const result = await service.updateExpense("1", validPayload);
 
       expect(result).toEqual(updated);
-      expect(mockExpenseRepository.update).toHaveBeenCalledWith("1", validPayload);
+      expect(mockExpenseRepository.update).toHaveBeenCalledWith("1", validPayload, undefined);
     });
 
     test("treba obrisati keš troškova nakon ažuriranja", async () => {
@@ -385,7 +397,7 @@ describe("ExpenseService", () => {
 
       await service.deleteExpense("1");
 
-      expect(mockExpenseRepository.delete).toHaveBeenCalledWith("1");
+      expect(mockExpenseRepository.delete).toHaveBeenCalledWith("1", undefined);
     });
 
     test("treba obrisati keš troškova nakon brisanja", async () => {

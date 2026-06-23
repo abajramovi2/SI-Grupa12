@@ -68,7 +68,24 @@
           (click)="openReportsTab($event)"
         >
           <span class="nav-icon">IZ</span>
-          <span>Izvjestaji</span>
+          <span>Izvještaji</span>
+        </a>
+        <a
+          routerLink="/notifikacije"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: true }"
+          [class.disabled]="!canOpenNotifications"
+          (click)="openNotificationsTab($event)"
+        >
+          <span class="nav-icon">NO</span>
+          <span>Notifikacije</span>
+          @if (unreadNotificationCount$ | async; as unreadNotificationCount) {
+            @if (unreadNotificationCount > 0) {
+              <span class="notification-count" [attr.aria-label]="unreadNotificationCount + ' nepročitanih notifikacija'">
+                {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+              </span>
+            }
+          }
         </a>
       </nav>
     }

@@ -22,6 +22,8 @@ export interface Expense {
 
   statusValidacije?: string;
   kreiraoKorisnikId?: string | number;
+  tipAnomalije?: string | null;
+  opisAnomalije?: string | null;
 }
 
 export interface CreateExpenseRequest {
@@ -52,6 +54,13 @@ export interface ExpenseReferenceData {
   dobavljaci: ReferenceItem[];
 }
 
+export interface ExpenseCategorySuggestion {
+  categoryId: string | number | null;
+  categoryName: string | null;
+  confidence: number;
+  reason: string;
+}
+
 export interface Budget {
   id: string | number;
   naziv: string;
@@ -63,9 +72,23 @@ export interface Budget {
   projekatId?: string | number | null;
   projekat?: string | null;
   verzijaBudzeta?: number;
-  statusOdobrenja?: string;
+  statusOdobrenja?: BudzetStatus;
+  kreiraoKorisnikId?: string | number | null;
+  odobrioKorisnikId?: string | number | null;
   kategorije: string[];
   kategorijaIds: Array<string | number>;
+}
+
+export type BudzetStatus = 'nacrt' | 'na_cekanju' | 'odobren' | 'odbijen' | 'na_doradi' | 'NACRT' | 'ODOBREN' | 'ODBIJEN' | 'NA_CEKANJU';
+
+export interface BudzetKomentar {
+  id: number;
+  budzetId: string | number;
+  autorId: string;
+  autorIme: string;
+  komentar: string;
+  tip: 'povrat_na_doradu' | 'ispravka' | 'odobravanje' | 'odbijanje';
+  kreiranoAt: string;
 }
 
 export interface CreateBudgetRequest {
@@ -103,6 +126,8 @@ export interface DataOverviewExpense {
   dobavljacId?: string | number | null;
   dobavljacNaziv?: string | null;
   kreiraoKorisnikId?: string | number;
+  tipAnomalije?: string | null;
+  opisAnomalije?: string | null;
 }
 
 export interface DataOverviewBudget {
@@ -215,4 +240,28 @@ export interface ExpenseReport {
     byMonth: ReportBreakdownItem[];
   };
   expenses: DataOverviewExpense[];
+}
+
+export type NotificationPriority = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface AppNotification {
+  id: string | number;
+  naslov: string;
+  poruka: string;
+  prioritet: NotificationPriority;
+  korisnikId?: string | number;
+  tipNotifikacije?: string;
+  povezaniTrosakId?: string | number | null;
+  akcijaStatus?: string | null;
+  procitano: boolean;
+  vrijemeKreiranja: string;
+}
+
+export interface Comment {
+  id: string | number;
+  tekst: string;
+  vrijemeUnosa: string;
+  autorId: string | number;
+  autorIme: string;
+  autorPrezime: string;
 }
