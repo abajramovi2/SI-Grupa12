@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthGuardService } from '../middleware/middleware.authguard';
+import { environment } from '../environments/environment';
 import { UserService } from '../services/user.service';
 
 @Component({
@@ -19,7 +20,7 @@ export class App implements OnInit {
   public readonly budgetRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
   public readonly dataOverviewRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
   public readonly reportRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
-  public readonly adminConsoleUrl = 'https://keycloak-production-4c61.up.railway.app/';
+  public readonly adminConsoleUrl = environment.keycloakUrl;
   public isLoading = false;
   public navMessage = '';
   public isLoggedIn = false;

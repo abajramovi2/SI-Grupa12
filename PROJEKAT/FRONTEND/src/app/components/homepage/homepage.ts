@@ -1,4 +1,5 @@
 import { Component, inject } from '@angular/core';
+import { environment } from '../../../environments/environment';
 import { AuthGuardService } from '../../../middleware/middleware.authguard';
 import { UserService } from '../../../services/user.service';
 
@@ -12,7 +13,7 @@ export class Homepage {
   private readonly authGuardService = inject(AuthGuardService);
   private readonly userService = inject(UserService);
 
-  public readonly adminConsoleUrl = 'https://keycloak-production-4c61.up.railway.app/';
+  public readonly adminConsoleUrl = environment.keycloakUrl;
   public errorMessage = '';
   public isLoading = false;
   public infoMessage = '';

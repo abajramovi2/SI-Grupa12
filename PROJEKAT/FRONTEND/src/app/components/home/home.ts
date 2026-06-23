@@ -4,6 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ActivatedRoute } from '@angular/router';
 import { AuthGuardService } from '../../../middleware/middleware.authguard';
+import { environment } from '../../../environments/environment';
 import { CreateExpenseRequest, Expense, ExpenseReferenceData } from '../../../models/entities';
 import { ExpenseService } from '../../../services/expense.service';
 
@@ -32,7 +33,7 @@ export class HomeComponent implements OnInit {
   public readonly budgetRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
   public readonly dataOverviewRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
   public readonly reportRoles = ['admin', 'glavni_racunovodja', 'finansijski_direktor'];
-  public readonly adminConsoleUrl = 'https://keycloak-production-4c61.up.railway.app/';
+  public readonly adminConsoleUrl = environment.keycloakUrl;
 
   public accessNotice = '';
   public expenses: Expense[] = [];

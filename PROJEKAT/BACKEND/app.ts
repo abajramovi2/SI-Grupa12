@@ -58,7 +58,7 @@ async function ensureDockerServices() {
   const composeFile = path.resolve(__dirname, "docker-compose.yml");
 
   try {
-    execSync(`docker compose -f "${composeFile}" up -d`, {
+    execSync(`docker compose -f "${composeFile}" up -d postgres keycloak`, {
       stdio: "inherit",
     });
   } catch (error) {
@@ -69,16 +69,23 @@ async function ensureDockerServices() {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function connectWithRetry(client: any, retries = 10, delayMs = 1000) {
+async function connectWithRetry(retries = 20, delayMs = 1000) {
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= retries; attempt += 1) {
+    const client = new Client(dbClientConfig());
+
     try {
       await client.connect();
-      return;
+      return client;
     } catch (error) {
       lastError = error;
       writeLog("WARN", `Baza nije spremna (pokušaj ${attempt}/${retries})...`);
+      try {
+        await client.end();
+      } catch {
+        // Client can fail before the connection is fully initialized.
+      }
       await delay(delayMs);
     }
   }
@@ -91,11 +98,11 @@ async function runMigrations() {
     throw new Error("DATABASE_URL nije definisan.");
   }
 
-  const client = new Client(dbClientConfig());
+  let client: any = null;
   
   try {
     writeLog("INFO", "Povezujem se na bazu podataka...");
-    await connectWithRetry(client);
+    client = await connectWithRetry();
     writeLog("INFO", "Konekcija na bazu uspješna.");
 
     const result = await client.query(
@@ -119,7 +126,9 @@ async function runMigrations() {
     writeLog("ERROR", "Greška pri migracijama", error);
     throw error;
   } finally {
-    await client.end();
+    if (client) {
+      await client.end();
+    }
   }
 }
 
@@ -128,11 +137,11 @@ async function ensureBaseData() {
     throw new Error("DATABASE_URL nije definisan.");
   }
 
-  const client = new Client(dbClientConfig());
+  let client: any = null;
 
   try {
     writeLog("INFO", "Provjeravam osnovne podatke za sifarnike...");
-    await connectWithRetry(client);
+    client = await connectWithRetry();
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS uvoz_troskova (
@@ -192,7 +201,9 @@ async function ensureBaseData() {
     writeLog("ERROR", "Greska pri provjeri osnovnih podataka", error);
     throw error;
   } finally {
-    await client.end();
+    if (client) {
+      await client.end();
+    }
   }
 }
 

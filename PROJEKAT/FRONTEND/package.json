@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "http-server dist/TIM12Frontend/browser -p $PORT",
+    "start": "ng serve --configuration development --host 0.0.0.0 --port 4200",
+    "start:static": "http-server dist/TIM12Frontend/browser -p $PORT",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
