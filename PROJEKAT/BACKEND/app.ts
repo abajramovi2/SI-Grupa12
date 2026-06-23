@@ -18,19 +18,19 @@ const { registerReportEndpoints } = require("./PRESENTATION API/Endpoints/Report
 const { registerNotificationEndpoints } = require("./PRESENTATION API/Endpoints/NotificationEndpoints");
 const { registerAIAnalysisEndpoints } = require("./PRESENTATION API/Endpoints/AIAnalysisEndpoints");
 const { registerCommentEndpoints } = require("./PRESENTATION API/Endpoints/CommentEndpoints");
+const { resolveKeycloakConfig } = require("./BLL/Config/KeycloakConfig");
 
 
 const PORT = Number(process.env.PORT) || 3000;
-const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
-const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
-const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID || "public";
-const KEYCLOAK_CLIENT_SECRET = process.env.KEYCLOAK_CLIENT_SECRET;
-const JWT_ISSUER = process.env.JWT_ISSUER;
-const JWT_AUDIENCE = process.env.JWT_AUDIENCE ;
-const JWKS_URI = process.env.JWKS_URI;
+const keycloakConfig = resolveKeycloakConfig();
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const SESSION_COOKIE_NAME = "tim12.sid";
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:4200";
+const FRONTEND_ORIGINS = new Set(
+  (process.env.FRONTEND_ORIGINS || process.env.FRONTEND_ORIGIN || "http://localhost:4200")
+    .split(",")
+    .map((origin: string) => origin.trim().replace(/\/+$/, ""))
+    .filter(Boolean)
+);
 const IS_PROD = process.env.NODE_ENV === "production";
 const dbClientConfig = () => ({
   connectionString: process.env.DATABASE_URL,
@@ -286,15 +286,7 @@ async function ensureBaseData() {
 function startServer() {
   const app = express();
   const authService = new AuthService(
-    {
-      jwtIssuer: JWT_ISSUER,
-      jwtAudience: JWT_AUDIENCE,
-      jwksUri: JWKS_URI,
-      keycloakUrl: KEYCLOAK_URL,
-      keycloakRealm: KEYCLOAK_REALM,
-      keycloakClientId: KEYCLOAK_CLIENT_ID,
-      keycloakClientSecret: KEYCLOAK_CLIENT_SECRET,
-    },
+    keycloakConfig,
     writeLog
   );
   
@@ -303,7 +295,7 @@ function startServer() {
   app.use((req: any, res: any, next: any) => {
     const requestOrigin = req.headers.origin;
 
-    if (requestOrigin === FRONTEND_ORIGIN) {
+    if (requestOrigin && FRONTEND_ORIGINS.has(requestOrigin.replace(/\/+$/, ""))) {
       res.setHeader("Access-Control-Allow-Origin", requestOrigin);
       res.setHeader("Access-Control-Allow-Credentials", "true");
       res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
